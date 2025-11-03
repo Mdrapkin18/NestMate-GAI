@@ -11,12 +11,22 @@ if (!API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
-export const generateTextWithGoogleSearch = async (prompt: string) => {
+const TEXT_CHAT_SYSTEM_INSTRUCTION = `You are NestMate, a friendly and helpful AI assistant for new parents.
+Your goal is to provide supportive, evidence-based advice based on the provided context about the baby.
+- Use the context about the baby's age, feeding, and sleep schedule to personalize your answers.
+- If the user asks a general question, you can use Google Search to find up-to-date information.
+- CRITICAL: Do not provide medical diagnoses or advice for medical emergencies.
+- If a question seems like a medical emergency (e.g., "baby is not breathing," "high fever"), you MUST advise the user to contact a healthcare professional or emergency services immediately.
+- Keep your answers concise, empathetic, and easy to understand.`;
+
+export const generateTextWithGoogleSearch = async (prompt: string, context: string) => {
   try {
+    const fullPrompt = `${context}\n\nQuestion: ${prompt}`;
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt,
+      contents: fullPrompt,
       config: {
+        systemInstruction: TEXT_CHAT_SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
       },
     });

@@ -13,6 +13,9 @@ import { useAuth } from './hooks/useAuth';
 import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from './services/firebase';
 import { feedSchema, sleepSchema } from './types';
+import { AIAssistant } from './components/AIAssistant';
+import { generateBabyContext } from './utils/contextHelper';
+import { AIIcon } from './components/icons/AIIcon';
 
 // Helper to convert our app objects to what Firestore expects (e.g., handling dates)
 const toFirestore = (data: any) => {
@@ -48,6 +51,13 @@ const App: React.FC = () => {
     const [isLoggingFeed, setIsLoggingFeed] = useState(false);
     const [lastAddedEntryId, setLastAddedEntryId] = useState<string | null>(null);
     const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+
+    const babyContext = useMemo(() => {
+        if (!baby) return '';
+        return generateBabyContext(baby, entries);
+    }, [baby, entries]);
+
 
     // Derived state for active timer
     const activeTimer = useMemo<TimerState | null>(() => {
@@ -256,9 +266,37 @@ const App: React.FC = () => {
                 <main className="pb-24">
                     {entriesLoading ? <div className="p-8 text-center">Loading entries...</div> : renderContent()}
                 </main>
+                
+                {!isLoggingFeed && !isAiAssistantOpen && activeTab === 'home' && (
+                    <button
+                        onClick={() => setIsAiAssistantOpen(true)}
+                        className="fixed bottom-24 right-4 z-40 bg-primary hover:bg-primary-700 text-white rounded-full p-4 shadow-lg transition-transform hover:scale-110 animate-pulse-slow"
+                        aria-label="Open AI Assistant"
+                    >
+                        <AIIcon className="w-8 h-8" />
+                    </button>
+                )}
+                
+                {isAiAssistantOpen && <AIAssistant onClose={() => setIsAiAssistantOpen(false)} babyContext={babyContext} />}
+
                 {lastAddedEntryId && <UndoBanner onUndo={handleUndo} />}
                 {!isLoggingFeed && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
             </div>
+             <style>{`
+                @keyframes pulse-slow {
+                    0%, 100% {
+                        transform: scale(1);
+                        box-shadow: 0 0 0 0 rgba(127, 86, 217, 0.7);
+                    }
+                    50% {
+                        transform: scale(1.05);
+                        box-shadow: 0 0 0 10px rgba(127, 86, 217, 0);
+                    }
+                }
+                .animate-pulse-slow {
+                    animation: pulse-slow 2s infinite;
+                }
+            `}</style>
         </div>
     );
 };

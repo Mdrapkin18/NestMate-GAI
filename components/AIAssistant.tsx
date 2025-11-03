@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LiveServerMessage, LiveSession } from '@google/genai';
 import { ChatMessage } from '../types';
@@ -8,6 +9,7 @@ import { AIIcon } from './icons/AIIcon';
 
 interface AIAssistantProps {
     onClose: () => void;
+    babyContext: string;
 }
 
 enum LiveState {
@@ -18,7 +20,7 @@ enum LiveState {
     ERROR
 }
 
-export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose }) => {
+export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -48,7 +50,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose }) => {
         setInput('');
         setIsLoading(true);
 
-        const response = await generateTextWithGoogleSearch(input);
+        const response = await generateTextWithGoogleSearch(input, babyContext);
         
         const modelMessage: ChatMessage = { role: 'model', text: response.text, sources: response.sources };
         setMessages(prev => [...prev, modelMessage]);
