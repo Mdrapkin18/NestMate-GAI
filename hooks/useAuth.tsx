@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { User, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firestore';
 import { UserProfile, userProfileSchema } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -69,6 +69,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       return null;
     } catch (error: any) {
       console.error("Error during Google sign-in", error);
+      if (error.code === 'auth/unauthorized-domain') {
+          return 'This domain is not authorized for sign-in. Please add it to the Firebase console under Authentication > Settings > Authorized domains.';
+      }
       return error.message;
     }
   };
@@ -79,6 +82,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       return null;
     } catch (error: any) {
       console.error("Error signing in with email:", error);
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+          return 'Invalid email or password. Please try again.';
+      }
       return error.message;
     }
   };
@@ -90,6 +96,9 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       return null;
     } catch (error: any) {
       console.error("Error signing up with email:", error);
+      if (error.code === 'auth/email-already-in-use') {
+        return 'An account with this email address already exists.';
+      }
       return error.message;
     }
   };

@@ -145,12 +145,15 @@ const App: React.FC = () => {
 
     useEffect(() => {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('firebase-messaging-sw.js')
+        // Construct a full URL for the service worker to prevent cross-origin errors.
+        // This is more robust than a relative or absolute path in complex hosting environments.
+        const swUrl = new URL('/firebase-messaging-sw.js', window.location.origin).href;
+        navigator.serviceWorker.register(swUrl)
           .then(registration => {
-            console.log('Service Worker registered successfully from App.tsx with scope:', registration.scope);
+            console.log('Service Worker registered successfully with scope:', registration.scope);
           })
           .catch(error => {
-            console.error('Service Worker registration failed from App.tsx:', error);
+            console.error('Service Worker registration failed:', error);
           });
       }
     }, []);
