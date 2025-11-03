@@ -12,7 +12,18 @@ export const generateBabyContext = (baby: Baby, entries: AnyEntry[]): string => 
 
     let context = `Current context for baby "${baby.name}":\n`;
     context += `- Age: ${getAge(baby.dob.toISOString())}\n`;
-    if (baby.weightKg) context += `- Last recorded weight: ${baby.weightKg} kg\n`;
+    
+    const weightParts = [];
+    if (baby.weightLbs && baby.weightLbs > 0) {
+        weightParts.push(`${baby.weightLbs} lbs`);
+    }
+    if (baby.weightOz && baby.weightOz > 0) {
+        weightParts.push(`${baby.weightOz.toFixed(1)} oz`);
+    }
+    if (weightParts.length > 0) {
+        context += `- Last recorded weight: ${weightParts.join(' ')}\n`;
+    }
+
 
     // Last Feed Info
     if (feeds.length > 0) {

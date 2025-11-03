@@ -17,6 +17,8 @@ import { AIAssistant } from './components/AIAssistant';
 import { generateBabyContext } from './utils/contextHelper';
 import { AIIcon } from './components/icons/AIIcon';
 import { CreateBabyScreen } from './components/CreateBabyScreen';
+import { JoinOrCreateFamilyScreen } from './components/JoinOrCreateFamilyScreen';
+import { createFamily, acceptInvite } from './services/familyService';
 
 // Helper to convert our app objects to what Firestore expects (e.g., handling dates)
 const toFirestore = (data: any) => {
@@ -70,10 +72,11 @@ const App: React.FC = () => {
     }, [entries]);
 
     useEffect(() => {
-        if (!userProfile) {
+        if (!userProfile || !userProfile.familyId) {
             if (!authLoading) {
                 setBabyLoading(false);
             }
+            setActiveBaby(null);
             return;
         }
 
@@ -85,7 +88,8 @@ const App: React.FC = () => {
                 return;
             }
 
-            const babyId = userProfile.babies[0];
+            // For now, just load the first baby. A future update could support multiple.
+            const babyId = userProfile.babies[0]; 
             const babyDocRef = doc(db, 'babies', babyId);
             try {
                 const babyDoc = await getDoc(babyDocRef);
@@ -144,21 +148,6 @@ const App: React.FC = () => {
     }, [user, userProfile]);
 
     useEffect(() => {
-      if ('serviceWorker' in navigator) {
-        // Construct a full URL for the service worker to prevent cross-origin errors.
-        // This is more robust than a relative or absolute path in complex hosting environments.
-        const swUrl = new URL('/firebase-messaging-sw.js', window.location.origin).href;
-        navigator.serviceWorker.register(swUrl)
-          .then(registration => {
-            console.log('Service Worker registered successfully with scope:', registration.scope);
-          })
-          .catch(error => {
-            console.error('Service Worker registration failed:', error);
-          });
-      }
-    }, []);
-
-    useEffect(() => {
         if (!user || !activeBaby?.id || !userProfile?.familyId) {
             setEntries([]);
             setEntriesLoading(false);
@@ -167,17 +156,24 @@ const App: React.FC = () => {
 
         setEntriesLoading(true);
         const entriesRef = collection(db, "entries");
+        // FIX: Simplify the query to only use one 'where' clause. This avoids the need
+        // for a manually-created composite index and is less likely to fail with
+        // permission errors. Sorting is now done on the client.
         const q = query(
             entriesRef, 
-            where("familyId", "==", userProfile.familyId),
-            where("babyId", "==", activeBaby.id), 
-            orderBy("startedAt", "desc")
+            where("familyId", "==", userProfile.familyId)
         );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const fetchedEntries: AnyEntry[] = [];
             querySnapshot.forEach((doc) => {
                 const data = { id: doc.id, ...doc.data() };
+                
+                // Perform client-side filtering for the active baby.
+                if (data.babyId !== activeBaby.id) {
+                    return;
+                }
+
                 if (data.kind) { // Feed entry
                     const parsed = feedSchema.safeParse(data);
                     if (parsed.success) fetchedEntries.push(parsed.data);
@@ -186,7 +182,9 @@ const App: React.FC = () => {
                     if (parsed.success) fetchedEntries.push(parsed.data);
                 }
             });
-            setEntries(fetchedEntries);
+            // Perform client-side sorting.
+            const sortedEntries = fetchedEntries.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+            setEntries(sortedEntries);
             setEntriesLoading(false);
         }, (error) => {
             console.error("Error fetching entries:", error);
@@ -342,12 +340,35 @@ const App: React.FC = () => {
         }
     }
     
-    if (authLoading || babyLoading) {
+    if (authLoading) {
         return <WelcomeScreen />;
     }
 
     if (!user) {
         return <Auth />;
+    }
+
+    // New user flow: direct to join/create family screen
+    if (!userProfile?.familyId) {
+        return <JoinOrCreateFamilyScreen 
+            onCreateFamily={async () => {
+                if (!user) throw new Error("User not authenticated");
+                await createFamily(user.uid);
+                // The onSnapshot listener in useAuth will automatically update the userProfile
+            }}
+            onJoinFamily={async (code: string) => {
+                if (!user) throw new Error("User not authenticated");
+                const result = await acceptInvite(code, user.uid);
+                // The onSnapshot listener will handle the update.
+                // We return the error message to the component to display.
+                return result.error || null;
+            }}
+        />
+    }
+
+    // Existing family member, but no baby created yet
+    if (babyLoading) {
+        return <WelcomeScreen />;
     }
 
     if (!activeBaby) {

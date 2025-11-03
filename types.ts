@@ -51,8 +51,9 @@ export const babySchema = z.object({
   name: z.string(),
   dob: dateSchema,
   photoUrl: z.string().url().optional(),
-  weightKg: z.number().positive().optional(),
-  heightCm: z.number().positive().optional(),
+  weightLbs: z.number().nonnegative().optional(),
+  weightOz: z.number().nonnegative().max(15.999).optional(),
+  heightInches: z.number().nonnegative().optional(),
 });
 export type Baby = z.infer<typeof babySchema>;
 
@@ -66,6 +67,15 @@ export const userProfileSchema = z.object({
   fcmTokens: z.array(z.string()).optional(),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
+
+export const inviteSchema = z.object({
+  id: z.string(), // The invite code itself
+  familyId: z.string(),
+  createdAt: dateSchema,
+  expiresAt: dateSchema,
+  createdBy: z.string(),
+});
+export type Invite = z.infer<typeof inviteSchema>;
 
 // App State Types
 export type ActiveTab = 'home' | 'feeding' | 'sleep' | 'history' | 'settings';

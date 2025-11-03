@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { User, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { UserProfile, userProfileSchema } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
@@ -23,43 +22,69 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setLoading(true);
+      if (unsubscribeProfile) {
+        unsubscribeProfile(); // Stop listening to the old user's profile
+      }
+
       if (firebaseUser) {
         setUser(firebaseUser);
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const profileData = userProfileSchema.safeParse({ uid: userDoc.id, ...userDoc.data() });
-          if (profileData.success) {
-            setUserProfile(profileData.data);
-          } else {
-            console.error("Zod validation failed for user profile:", profileData.error);
-            setUserProfile(null); // Handle invalid data case
+
+        unsubscribeProfile = onSnapshot(userDocRef, 
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const profileData = userProfileSchema.safeParse({ uid: docSnap.id, ...docSnap.data() });
+              if (profileData.success) {
+                setUserProfile(profileData.data);
+              } else {
+                console.error("Zod validation failed for user profile:", profileData.error);
+                setUserProfile(null);
+              }
+              setLoading(false);
+            } else {
+              // This is a new user, create their profile document
+              const newUserProfile: Omit<UserProfile, 'uid'> = {
+                email: firebaseUser.email!,
+                displayName: firebaseUser.displayName || '',
+                // Family ID and role are left undefined until they join or create a family
+              };
+              setDoc(userDocRef, newUserProfile)
+                .then(() => {
+                   console.log("New user profile created.");
+                   // The onSnapshot listener will fire again with the new data,
+                   // so we don't need to call setUserProfile here.
+                })
+                .catch(error => {
+                  console.error("Error creating user profile:", error);
+                  setLoading(false);
+                });
+            }
+          },
+          (error) => {
+            console.error("Error listening to user profile:", error);
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
           }
-        } else {
-          // Create a profile for a new user.
-          // This is their first time, so we also create a new family for them.
-          const newFamilyId = uuidv4();
-          const newUserProfile: UserProfile = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email!,
-            displayName: firebaseUser.displayName || '',
-            role: 'owner', // First user is the owner of the family
-            familyId: newFamilyId,
-            babies: [], // Explicitly initialize babies array for new users
-          };
-          await setDoc(userDocRef, newUserProfile);
-          setUserProfile(newUserProfile);
-        }
+        );
       } else {
+        // User is signed out
         setUser(null);
         setUserProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+    };
   }, []);
   
   const signInWithGoogle = async (): Promise<string | null> => {

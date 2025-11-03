@@ -44,15 +44,50 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSaveMessage('');
         const { id, value } = e.target;
+
+        // Handle weight fields with special logic
+        if (id === 'weightLbs' || id === 'weightOz') {
+            let newLbs = formState.weightLbs ?? 0;
+            let newOz = formState.weightOz ?? 0;
+            const numValue = value === '' ? 0 : parseFloat(value);
+            if (isNaN(numValue)) return; // Ignore non-numeric input
+
+            if (id === 'weightLbs') {
+                newLbs = numValue < 0 ? 0 : numValue;
+            } else { // 'weightOz'
+                newOz = numValue;
+                // Handle rollover when oz goes to 16 or more
+                if (newOz >= 16) {
+                    newLbs += Math.floor(newOz / 16);
+                    newOz %= 16;
+                } 
+                // Handle "borrowing" when oz goes below 0 (e.g., from spinner)
+                else if (newOz < 0) {
+                    if (newLbs > 0) {
+                        newLbs -= 1;
+                        newOz = 15;
+                    } else {
+                        // Can't borrow from 0 lbs, so just set oz to 0
+                        newOz = 0;
+                    }
+                }
+            }
+            setFormState(prev => ({ ...prev, weightLbs: newLbs, weightOz: newOz }));
+            return;
+        }
+
+        // Handle height to prevent negative values
+        if (id === 'heightInches') {
+             const numValue = value === '' ? undefined : parseFloat(value);
+             if (value !== '' && (numValue === undefined || isNaN(numValue) || numValue < 0)) return;
+             setFormState(prev => ({...prev, heightInches: numValue }));
+             return;
+        }
         
+        // Handle all other fields normally
         let newValue: any = value;
         if (id === 'dob') {
             newValue = new Date(value + 'T00:00:00');
-        } else if (e.target.type === 'number') {
-            newValue = value === '' ? undefined : parseFloat(value);
-            if (value !== '' && isNaN(newValue as number)) {
-                return;
-            }
         }
     
         setFormState(prev => ({ ...prev, [id]: newValue }));
@@ -89,8 +124,38 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
             <div className="bg-light-surface dark:bg-dark-surface p-6 rounded-xl shadow-sm space-y-4">
                 <InputField label="Name" id="name" value={formState.name} onChange={handleChange} placeholder="e.g., Keegan" />
                 <InputField label="Date of Birth" id="dob" value={formatDateForInput(formState.dob)} onChange={handleChange} type="date" />
-                <InputField label="Weight (kg)" id="weightKg" value={formState.weightKg ?? ''} onChange={handleChange} type="number" placeholder="e.g., 4.5"/>
-                <InputField label="Height (cm)" id="heightCm" value={formState.heightCm ?? ''} onChange={handleChange} type="number" placeholder="e.g., 55" />
+                
+                <div>
+                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                        Weight
+                    </label>
+                    <div className="flex items-center space-x-2">
+                        <div className="relative flex-1">
+                            <input
+                                type="number"
+                                id="weightLbs"
+                                value={formState.weightLbs ?? ''}
+                                onChange={handleChange}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text pr-10"
+                            />
+                             <span className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500 text-sm">lbs</span>
+                        </div>
+                        <div className="relative flex-1">
+                             <input
+                                type="number"
+                                id="weightOz"
+                                value={formState.weightOz ?? ''}
+                                onChange={handleChange}
+                                placeholder="0"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text pr-10"
+                            />
+                            <span className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500 text-sm">oz</span>
+                        </div>
+                    </div>
+                </div>
+
+                <InputField label="Height (in)" id="heightInches" value={formState.heightInches ?? ''} onChange={handleChange} type="number" placeholder="e.g., 21.5" />
 
                 <button 
                     onClick={handleSave}

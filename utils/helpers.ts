@@ -62,6 +62,17 @@ export const formatHistoryDate = (timestamp: number): string => {
   });
 };
 
+// Generates a user-friendly invite code
+export const generateInviteCode = (length = 6): string => {
+  // Exclude confusing characters like O, 0, I, 1, l
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 
 // Gemini Live API Audio Helpers
 
