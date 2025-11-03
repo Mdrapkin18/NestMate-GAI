@@ -1,4 +1,4 @@
-import { AnyEntry, Baby, Feed, Sleep } from '../types';
+import { AnyEntry, Baby, Feed, Sleep, Diaper, Bath } from '../types';
 import { getAge } from './helpers';
 
 export const generateBabyContext = (baby: Baby, entries: AnyEntry[]): string => {
@@ -9,6 +9,9 @@ export const generateBabyContext = (baby: Baby, entries: AnyEntry[]): string => 
     // Separate and sort entries
     const feeds = entries.filter(e => 'kind' in e).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()) as Feed[];
     const sleeps = entries.filter(e => 'category' in e).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()) as Sleep[];
+    const diapers = entries.filter(e => 'type' in e).sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime()) as Diaper[];
+    const baths = entries.filter(e => 'bathType' in e).sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime()) as Bath[];
+
 
     let context = `Current context for baby "${baby.name}":\n`;
     context += `- Age: ${getAge(baby.dob.toISOString())}\n`;
@@ -57,6 +60,23 @@ export const generateBabyContext = (baby: Baby, entries: AnyEntry[]): string => 
     } else {
         context += "- No sleep entries recorded yet.\n";
     }
+    
+    // Last Diaper Info
+    if (diapers.length > 0) {
+        const lastDiaper = diapers[0];
+        let diaperDetails = `Last diaper change was at ${formatTime(lastDiaper.startedAt)} (${lastDiaper.type}).`;
+        if (lastDiaper.rash) {
+            diaperDetails += " Rash was present.";
+        }
+        context += `- ${diaperDetails}\n`;
+    }
+
+    // Last Bath Info
+    if(baths.length > 0) {
+        const lastBath = baths[0];
+        context += `- Last bath was at ${formatTime(lastBath.startedAt)} (${lastBath.bathType} bath).\n`;
+    }
+
 
     // Recent Feed Times
     if (feeds.length > 1) {

@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LiveServerMessage } from '@google/genai';
 import { ChatMessage } from '../types';
@@ -49,6 +50,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
         if (!input.trim()) return;
 
         const userMessage: ChatMessage = { role: 'user', text: input };
+        console.log('[AIAssistant] Sending text message:', userMessage);
         setMessages(prev => [...prev, userMessage]);
         setInput('');
         setIsLoading(true);
@@ -56,11 +58,13 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
         const response = await generateTextWithGoogleSearch(input, babyContext);
         
         const modelMessage: ChatMessage = { role: 'model', text: response.text, sources: response.sources };
+        console.log('[AIAssistant] Received model response:', modelMessage);
         setMessages(prev => [...prev, modelMessage]);
         setIsLoading(false);
     };
 
     const stopLiveSession = useCallback(() => {
+        console.log('[AIAssistant] Stopping live session.');
         if (sessionPromiseRef.current) {
             sessionPromiseRef.current.then(session => session.close());
             sessionPromiseRef.current = null;
@@ -86,13 +90,15 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
             return;
         }
 
+        console.log('[AIAssistant] Starting live session toggle.');
         setLiveState(LiveState.CONNECTING);
         setMessages(prev => [...prev, {role: 'model', text: 'Connecting to live assistant...'}]);
 
         try {
             await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('[AIAssistant] Microphone permission granted.');
         } catch(err) {
-            console.error("Microphone permission denied", err);
+            console.error("[AIAssistant] Microphone permission denied", err);
             setMessages(prev => [...prev, {role: 'model', text: 'Microphone access is required for voice chat.'}]);
             setLiveState(LiveState.ERROR);
             return;
@@ -103,6 +109,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
 
         const callbacks = {
             onopen: async () => {
+                console.log('[AIAssistant] Live session opened.');
                 setLiveState(LiveState.LISTENING);
                 setMessages(prev => [...prev, {role: 'model', text: 'I\'m listening...'}]);
                 streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -123,10 +130,11 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
                 scriptProcessorRef.current.connect(inputAudioContextRef.current.destination);
             },
             onmessage: async (message: LiveServerMessage) => {
+                console.log('[AIAssistant] Live message received:', message);
                 const text = message.serverContent?.outputTranscription?.text || message.serverContent?.inputTranscription?.text;
                 if(text) {
                     // Simple transcription display for now
-                    console.log("Transcription:", text);
+                    console.log("[AIAssistant] Transcription:", text);
                 }
 
                 const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
@@ -149,13 +157,13 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
                 }
             },
             onerror: (e: ErrorEvent) => {
-                console.error('Live API Error:', e);
+                console.error('[AIAssistant] Live API Error:', e);
                 setMessages(prev => [...prev, {role: 'model', text: 'An error occurred with the voice assistant.'}]);
                 setLiveState(LiveState.ERROR);
                 stopLiveSession();
             },
             onclose: (e: CloseEvent) => {
-                console.log('Live API Closed');
+                console.log('[AIAssistant] Live API Closed');
                 stopLiveSession();
             },
         };

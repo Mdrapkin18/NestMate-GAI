@@ -25,10 +25,12 @@ import { UserProfile, Invite, inviteSchema } from '../types';
 export const createFamily = async (userId: string): Promise<string> => {
     const familyId = uuidv4();
     const userRef = doc(db, 'users', userId);
+    console.log(`[familyService] Creating family ${familyId} for user ${userId}`);
     await updateDoc(userRef, {
         familyId: familyId,
         role: 'owner'
     });
+    console.log(`[familyService] Successfully created family.`);
     return familyId;
 };
 
@@ -53,6 +55,7 @@ export const generateInvite = async (familyId: string, createdBy: string): Promi
         expiresAt,
     };
     
+    console.log(`[familyService] Generating invite code "${code}" for family ${familyId}`);
     await setDoc(inviteRef, newInvite);
     return code;
 };
@@ -64,16 +67,23 @@ export const generateInvite = async (familyId: string, createdBy: string): Promi
  * @returns An object indicating success or failure with an error message.
  */
 export const acceptInvite = async (inviteCode: string, userId: string): Promise<{ success: boolean; error?: string }> => {
-    const inviteRef = doc(db, 'invites', inviteCode.toUpperCase());
+    const code = inviteCode.toUpperCase().trim();
+    console.log(`[familyService] User ${userId} attempting to accept invite code "${code}"`);
+    const inviteRef = doc(db, 'invites', code);
     const inviteSnap = await getDoc(inviteRef);
 
     if (!inviteSnap.exists()) {
+        console.warn(`[familyService] Invite code "${code}" not found.`);
         return { success: false, error: "Invalid invite code." };
     }
 
     const inviteData = inviteSnap.data() as Omit<Invite, 'id'>;
     
-    if (inviteData.expiresAt < new Date()) {
+    // Convert Firestore Timestamp to Date if necessary
+    const expiresAtDate = (inviteData.expiresAt as unknown as Timestamp).toDate ? (inviteData.expiresAt as unknown as Timestamp).toDate() : inviteData.expiresAt;
+
+    if (expiresAtDate < new Date()) {
+        console.warn(`[familyService] Invite code "${code}" has expired.`);
         return { success: false, error: "This invite code has expired." };
     }
 
@@ -82,6 +92,7 @@ export const acceptInvite = async (inviteCode: string, userId: string): Promise<
         familyId: inviteData.familyId,
         role: 'caregiver'
     });
+    console.log(`[familyService] User ${userId} successfully joined family ${inviteData.familyId}.`);
 
     return { success: true };
 };
@@ -130,7 +141,7 @@ export const getActiveInviteListener = (familyId: string, callback: (invite: Inv
             if (parsedInvite.success) {
                 callback(parsedInvite.data);
             } else {
-                console.error("Failed to parse invite:", parsedInvite.error);
+                console.error("[familyService] Failed to parse invite:", parsedInvite.error);
                 callback(null);
             }
         }
@@ -143,9 +154,11 @@ export const getActiveInviteListener = (familyId: string, callback: (invite: Inv
  */
 export const removeFamilyMember = async (userId: string): Promise<void> => {
     const userRef = doc(db, 'users', userId);
+    console.log(`[familyService] Removing user ${userId} from their family.`);
     // FIX: Use deleteField() to properly remove fields instead of setting them to null.
     await updateDoc(userRef, {
         familyId: deleteField(),
         role: deleteField()
     });
+    console.log(`[familyService] Successfully removed user ${userId}.`);
 };

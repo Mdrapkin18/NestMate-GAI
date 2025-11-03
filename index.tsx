@@ -7,6 +7,8 @@ import { AuthProvider } from './hooks/useAuth';
 // This prevents "The document is in an invalid state" errors.
 const registerServiceWorker = () => {
   if ('serviceWorker' in navigator) {
+    // FIX: Explicitly construct the service worker URL from the current origin
+    // to resolve the "origin does not match" error.
     const swUrl = new URL('/firebase-messaging-sw.js', window.location.origin).href;
     navigator.serviceWorker.register(swUrl)
       .then(registration => {

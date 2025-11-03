@@ -44,6 +44,27 @@ export const sleepSchema = entrySchema.extend({
 });
 export type Sleep = z.infer<typeof sleepSchema>;
 
+// Diaper Schemas
+export const diaperSchema = entrySchema.extend({
+  type: z.enum(['pee', 'poop', 'both']),
+  startedAt: dateSchema, // Represents the time of the change
+  endedAt: dateSchema, // Same as startedAt for an instantaneous event
+  rash: z.boolean().optional(),
+  consistency: z.enum(['runny', 'mushy', 'soft', 'hard', 'solid']).optional(),
+  color: z.enum(['yellow', 'brown', 'green', 'black', 'red']).optional(),
+  volume: z.enum(['light', 'medium', 'heavy']).optional(),
+});
+export type Diaper = z.infer<typeof diaperSchema>;
+
+// Bath Schemas
+export const bathSchema = entrySchema.extend({
+  bathType: z.enum(['sponge', 'full']),
+  startedAt: dateSchema, // Represents the time of the bath
+  endedAt: dateSchema, // Same as startedAt for an instantaneous event
+});
+export type Bath = z.infer<typeof bathSchema>;
+
+
 // Profile Schemas
 export const babySchema = z.object({
   id: z.string(),
@@ -87,7 +108,7 @@ export interface TimerState {
   side?: 'left' | 'right';
 }
 
-export type AnyEntry = Feed | Sleep;
+export type AnyEntry = Feed | Sleep | Diaper | Bath;
 
 export interface ChatMessage {
   role: 'user' | 'model';

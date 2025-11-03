@@ -8,19 +8,24 @@ const VAPID_KEY = 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE';
 
 
 export const requestNotificationPermission = async (): Promise<NotificationPermission | null> => {
-    if (!await isSupported()) {
-        console.log("Firebase Messaging is not supported in this browser.");
+    try {
+        if (!await isSupported()) {
+            console.log("Firebase Messaging is not supported in this browser.");
+            return null;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            console.log('Notification permission granted.');
+            await saveMessagingDeviceToken();
+        } else {
+            console.log('Unable to get permission to notify.');
+        }
+        return permission;
+    } catch (error) {
+        console.error("[notificationService] Error requesting permission:", error);
         return null;
     }
-
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-        console.log('Notification permission granted.');
-        await saveMessagingDeviceToken();
-    } else {
-        console.log('Unable to get permission to notify.');
-    }
-    return permission;
 };
 
 const saveMessagingDeviceToken = async () => {

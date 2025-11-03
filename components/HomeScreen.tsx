@@ -2,7 +2,8 @@ import React from 'react';
 import { AnyEntry, Baby, TimerState, Feed } from '../types';
 import { FeedingIcon } from './icons/FeedingIcon';
 import { SleepIcon } from './icons/SleepIcon';
-import { ActivityIcon } from './icons/DiaperIcon';
+import { DiaperIcon } from './icons/DiaperIcon';
+import { BathIcon } from './icons/BathIcon';
 import { getAge, formatDuration, getAgeInMonths } from '../utils/helpers';
 import { useTimer } from '../hooks/useTimer';
 
@@ -13,6 +14,8 @@ interface HomeScreenProps {
   onStopTimer: () => void;
   onStartFeedClick: () => void;
   onStartSleepClick: () => void;
+  onStartDiaperClick: () => void;
+  onStartBathClick: () => void;
 }
 
 const StatCard: React.FC<React.PropsWithChildren<{ title: string; value: string; }>> = ({ title, value, children }) => (
@@ -24,7 +27,7 @@ const StatCard: React.FC<React.PropsWithChildren<{ title: string; value: string;
 );
 
 const QuickAddButton: React.FC<{label: string; icon: React.ReactNode; onClick: () => void;}> = ({label, icon, onClick}) => (
-    <button onClick={onClick} className="flex flex-col items-center space-y-2 text-light-text dark:text-dark-text">
+    <button onClick={onClick} className="flex flex-col items-center justify-center space-y-2 text-light-text dark:text-dark-text p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
         <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center text-primary dark:text-primary-200">
             {icon}
         </div>
@@ -79,7 +82,7 @@ const BabyCard: React.FC<{baby: Baby, activeTimer: TimerState | null}> = ({ baby
 }
 
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTimer, onStopTimer, onStartFeedClick, onStartSleepClick }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTimer, onStopTimer, onStartFeedClick, onStartSleepClick, onStartDiaperClick, onStartBathClick }) => {
     const totalFeedsToday = entries.filter(e => 'kind' in e && e.startedAt.toDateString() === new Date().toDateString()).length;
     // This is a simplified duration calculation. A real app would sum up durations.
     const totalFeedTimeToday = "8 hr 45 min"; 
@@ -165,10 +168,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
 
             <div>
                 <h3 className="text-lg font-semibold mb-4 text-light-text dark:text-dark-text">Quick Add</h3>
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-4 gap-2 text-center">
                     <QuickAddButton label="Feeding" icon={<FeedingIcon className="w-8 h-8"/>} onClick={onStartFeedClick} />
                     <QuickAddButton label="Sleep" icon={<SleepIcon className="w-8 h-8"/>} onClick={onStartSleepClick} />
-                    <QuickAddButton label="Activity" icon={<ActivityIcon className="w-8 h-8"/>} onClick={() => alert('Log activity clicked!')} />
+                    <QuickAddButton label="Diaper" icon={<DiaperIcon className="w-8 h-8"/>} onClick={onStartDiaperClick} />
+                    <QuickAddButton label="Bath" icon={<BathIcon className="w-8 h-8"/>} onClick={onStartBathClick} />
                 </div>
             </div>
         </div>

@@ -96,6 +96,7 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
     const handleSave = async () => {
         setIsSaving(true);
         setSaveMessage('');
+        console.log('[BabyProfile] Attempting to save baby profile changes:', formState);
         try {
             const babyRef = doc(db, "babies", baby.id);
             const { id, ...saveData } = formState;
@@ -103,8 +104,9 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
             
             onUpdateBaby(formState);
             setSaveMessage('Saved!');
+            console.log('[BabyProfile] Save successful.');
         } catch (error) {
-            console.error("Error saving baby profile:", error);
+            console.error("[BabyProfile] Error saving baby profile:", error);
             setSaveMessage('Error saving.');
         } finally {
             setIsSaving(false);

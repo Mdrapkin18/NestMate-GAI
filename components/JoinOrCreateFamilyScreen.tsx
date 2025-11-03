@@ -17,9 +17,13 @@ export const JoinOrCreateFamilyScreen: React.FC<JoinOrCreateFamilyScreenProps> =
         }
         setError('');
         setIsLoading(true);
+        console.log(`[JoinOrCreateFamily] Attempting to join family with code: ${inviteCode}`);
         const joinError = await onJoinFamily(inviteCode);
         if (joinError) {
+            console.error(`[JoinOrCreateFamily] Failed to join family: ${joinError}`);
             setError(joinError);
+        } else {
+            console.log('[JoinOrCreateFamily] Successfully joined family.');
         }
         setIsLoading(false);
     };
@@ -27,8 +31,16 @@ export const JoinOrCreateFamilyScreen: React.FC<JoinOrCreateFamilyScreenProps> =
     const handleCreate = async () => {
         setError('');
         setIsLoading(true);
-        await onCreateFamily();
-        // No need to set loading to false, as the app state will change and unmount this component
+        console.log('[JoinOrCreateFamily] Attempting to create a new family.');
+        try {
+            await onCreateFamily();
+            console.log('[JoinOrCreateFamily] Family creation process initiated.');
+        } catch(e) {
+            console.error('[JoinOrCreateFamily] Error creating family:', e);
+            setError("Could not create family. Please try again.");
+            setIsLoading(false);
+        }
+        // No need to set loading to false on success, as the app state will change and unmount this component
     };
 
     return (

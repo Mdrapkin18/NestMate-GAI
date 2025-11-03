@@ -54,15 +54,21 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({ onBack }) => {
             setIsLoading(false);
             return;
         }
+        console.log('[FamilyScreen] Subscribing to family members and invite listeners.');
         setIsLoading(true);
 
-        const unsubscribeMembers = getFamilyMembersListener(userProfile.familyId, setMembers);
+        const unsubscribeMembers = getFamilyMembersListener(userProfile.familyId, (members) => {
+            console.log('[FamilyScreen] Received updated members list:', members);
+            setMembers(members);
+        });
         const unsubscribeInvite = getActiveInviteListener(userProfile.familyId, (activeInvite) => {
+            console.log('[FamilyScreen] Received active invite:', activeInvite);
             setInvite(activeInvite);
             setIsLoading(false);
         });
 
         return () => {
+            console.log('[FamilyScreen] Unsubscribing from listeners.');
             unsubscribeMembers();
             unsubscribeInvite();
         };
@@ -72,10 +78,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({ onBack }) => {
     const handleRegenerate = async () => {
         if (!user || !userProfile?.familyId) return;
         setIsGenerating(true);
+        console.log('[FamilyScreen] User requested to generate new invite code.');
         try {
             await generateInvite(userProfile.familyId, user.uid);
         } catch(error) {
-            console.error("Error generating invite:", error);
+            console.error("[FamilyScreen] Error generating invite:", error);
         } finally {
             setIsGenerating(false);
         }
@@ -84,21 +91,23 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({ onBack }) => {
     const handleRemove = async (memberId: string) => {
         if (!userProfile?.familyId) return;
         if (confirm("Are you sure you want to remove this member? This action cannot be undone.")) {
+            console.log(`[FamilyScreen] User requested to remove member: ${memberId}`);
             try {
                 await removeFamilyMember(memberId);
             } catch(error) {
-                console.error("Error removing member:", error);
+                console.error(`[FamilyScreen] Error removing member ${memberId}:`, error);
                 alert("Could not remove member. Please try again.");
             }
         }
     }
 
     const handleCopy = (text: string) => {
+        console.log(`[FamilyScreen] Attempting to copy text to clipboard: "${text}"`);
         navigator.clipboard.writeText(text).then(() => {
             setCopySuccess('Copied!');
             setTimeout(() => setCopySuccess(''), 2000);
         }).catch(err => {
-            console.error('Failed to copy text: ', err);
+            console.error('[FamilyScreen] Failed to copy text: ', err);
             setCopySuccess('Failed to copy');
             setTimeout(() => setCopySuccess(''), 2000);
         });

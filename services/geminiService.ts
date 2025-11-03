@@ -23,6 +23,7 @@ Your goal is to provide supportive, evidence-based advice based on the provided 
 export const generateTextWithGoogleSearch = async (prompt: string, context: string) => {
   try {
     const fullPrompt = `${context}\n\nQuestion: ${prompt}`;
+    console.log('[geminiService] Sending prompt to Gemini:', { prompt, context });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: fullPrompt,
@@ -40,12 +41,13 @@ export const generateTextWithGoogleSearch = async (prompt: string, context: stri
         title: chunk.web.title
       }));
 
+    console.log('[geminiService] Received response from Gemini:', { text: response.text, sources });
     return {
         text: response.text,
         sources: sources || []
     };
   } catch (error) {
-    console.error("Error generating text with Google Search:", error);
+    console.error("[geminiService] Error generating text with Google Search:", error);
     return {
         text: "Sorry, I encountered an error. Please try again.",
         sources: []
@@ -62,6 +64,7 @@ export const connectToLiveAPI = (callbacks: {
 // FIX: The LiveSession type is not exported from the @google/genai library.
 // Use ReturnType<typeof ai.live.connect> to infer the return type of the connect method.
 }): ReturnType<typeof ai.live.connect> => {
+    console.log('[geminiService] Connecting to Live API...');
     return ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks,
