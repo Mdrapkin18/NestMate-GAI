@@ -2,6 +2,11 @@ import { getMessaging, getToken, isSupported } from "firebase/messaging";
 import { app, db, auth } from "./firebase";
 import { doc, updateDoc, arrayUnion } from "firebase/firestore";
 
+// IMPORTANT: Replace this with your VAPID key from the Firebase console.
+// Go to Project Settings > Cloud Messaging > Web configuration > Web Push certificates.
+const VAPID_KEY = 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE';
+
+
 export const requestNotificationPermission = async (): Promise<NotificationPermission | null> => {
     if (!await isSupported()) {
         console.log("Firebase Messaging is not supported in this browser.");
@@ -22,10 +27,18 @@ const saveMessagingDeviceToken = async () => {
     if (!auth.currentUser) {
         return;
     }
+    if (VAPID_KEY === 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE' || !VAPID_KEY) {
+        console.error(
+`VAPID key not set in services/notificationService.ts.
+Please add your key to enable push notifications.
+You can find it in your Firebase project:
+Project Settings > Cloud Messaging > Web configuration > Web Push certificates > Generate key pair.`
+        );
+        return;
+    }
     try {
         const messaging = getMessaging(app);
-        // You need to provide your VAPID key here
-        const currentToken = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE' });
+        const currentToken = await getToken(messaging, { vapidKey: VAPID_KEY });
         if (currentToken) {
             console.log('Got FCM token:', currentToken);
             const userDocRef = doc(db, 'users', auth.currentUser.uid);

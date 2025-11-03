@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache } from 'firebase/firestore';
 import { getMessaging } from "firebase/messaging";
 
 // In a real app, this would be in environment variables and not checked into source control.
@@ -16,19 +16,22 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 const messaging = getMessaging(app);
 
-
-// Enable offline persistence for Firestore.
-// This allows the app to work offline and syncs data when the connection is restored.
-enableIndexedDbPersistence(db)
-  .catch((err) => {
-    if (err.code == 'failed-precondition') {
-      console.warn('Firestore persistence failed: multiple tabs open. Offline support will be disabled.');
-    } else if (err.code == 'unimplemented') {
-      console.warn('Firestore persistence not available in this browser. Offline support will be disabled.');
-    }
+// Enable offline persistence for Firestore using the recommended modern approach.
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({})
   });
+} catch (error: any) {
+  if (error.code == 'failed-precondition') {
+    console.warn('Firestore persistence failed: multiple tabs open. Offline support will be limited.');
+  } else if (error.code == 'unimplemented') {
+    console.warn('Firestore persistence not available in this browser. Offline support will be disabled.');
+  }
+  // Fallback to default in-memory cache if persistence fails
+  db = getFirestore(app);
+}
 
 export { app, auth, db, messaging };

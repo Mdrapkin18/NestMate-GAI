@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { User, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { UserProfile, userProfileSchema } from '../types';
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: () => Promise<string | null>;
+  signInWithEmail: (email: string, password: string) => Promise<string | null>;
+  signUpWithEmail: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 }
 
@@ -27,8 +29,13 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-          const profileData = userProfileSchema.parse({ uid: userDoc.id, ...userDoc.data() });
-          setUserProfile(profileData);
+          const profileData = userProfileSchema.safeParse({ uid: userDoc.id, ...userDoc.data() });
+          if (profileData.success) {
+            setUserProfile(profileData.data);
+          } else {
+            console.error("Zod validation failed for user profile:", profileData.error);
+            setUserProfile(null); // Handle invalid data case
+          }
         } else {
           // Create a profile for a new user
           const newUserProfile: UserProfile = {
@@ -50,12 +57,35 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     return () => unsubscribe();
   }, []);
   
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (): Promise<string | null> => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+      return null;
+    } catch (error: any) {
       console.error("Error during Google sign-in", error);
+      return error.message;
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string): Promise<string | null> => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return null;
+    } catch (error: any) {
+      console.error("Error signing in with email:", error);
+      return error.message;
+    }
+  };
+
+  const signUpWithEmail = async (email: string, password: string): Promise<string | null> => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle the new user and profile creation
+      return null;
+    } catch (error: any) {
+      console.error("Error signing up with email:", error);
+      return error.message;
     }
   };
 
@@ -63,7 +93,7 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
     await firebaseSignOut(auth);
   };
 
-  const value = { user, userProfile, loading, signInWithGoogle, signOut };
+  const value = { user, userProfile, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

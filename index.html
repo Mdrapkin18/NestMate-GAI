@@ -81,7 +81,9 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/firebase-messaging-sw.js')
+          // Construct the full URL for the service worker to avoid cross-origin issues
+          const swUrl = `${window.location.origin}/firebase-messaging-sw.js`;
+          navigator.serviceWorker.register(swUrl)
             .then(registration => {
               console.log('Service Worker registered with scope:', registration.scope);
             })

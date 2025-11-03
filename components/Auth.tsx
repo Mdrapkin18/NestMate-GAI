@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { GoogleIcon } from './icons/GoogleIcon';
 import { useAuth } from '../hooks/useAuth';
 
-
-const AuthInput: React.FC<{id: string, type: string, placeholder: string}> = ({id, type, placeholder}) => (
+const AuthInput: React.FC<{id: string, type: string, placeholder: string, value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void}> = ({id, type, placeholder, value, onChange}) => (
     <div>
         <label htmlFor={id} className="sr-only">{placeholder}</label>
         <input
@@ -11,26 +10,59 @@ const AuthInput: React.FC<{id: string, type: string, placeholder: string}> = ({i
             name={id}
             type={type}
             required
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text"
+            autoComplete={id}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary bg-light-surface dark:bg-dark-surface text-light-text dark:text-dark-text"
             placeholder={placeholder}
+            value={value}
+            onChange={onChange}
         />
     </div>
 );
 
 export const Auth: React.FC = () => {
     const [isLoginView, setIsLoginView] = useState(true);
-    const { signInWithGoogle } = useAuth();
+    const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleGoogleSignIn = async () => {
-        await signInWithGoogle();
+        setError(null);
+        setIsLoading(true);
+        const authError = await signInWithGoogle();
+        if(authError) setError(authError);
+        setIsLoading(false);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // In a real app, you would handle email/password auth here.
-        alert('Email/Password sign in is not implemented in this demo.');
+        setError(null);
+
+        if (!isLoginView && password !== confirmPassword) {
+            setError("Passwords do not match.");
+            return;
+        }
+
+        setIsLoading(true);
+        const authAction = isLoginView ? signInWithEmail : signUpWithEmail;
+        const authError = await authAction(email, password);
+        
+        if (authError) {
+            setError(authError);
+        }
+        setIsLoading(false);
     };
 
+    const toggleView = () => {
+      setIsLoginView(!isLoginView);
+      setError(null);
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+    }
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-light-bg dark:bg-dark-bg p-4 text-light-text dark:text-dark-text">
@@ -44,9 +76,15 @@ export const Auth: React.FC = () => {
                         {isLoginView ? 'Sign In' : 'Create an Account'}
                     </h2>
                     
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <AuthInput id="email" type="email" placeholder="Email" />
-                        <AuthInput id="password" type="password" placeholder="Password" />
+                    {error && <p className="bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded-md mb-4 text-sm">{error}</p>}
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <AuthInput id="email" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+                        <AuthInput id="password" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+
+                        {!isLoginView && (
+                            <AuthInput id="confirmPassword" type="password" placeholder="Confirm Password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                        )}
 
                         {isLoginView && (
                             <div className="text-right">
@@ -55,8 +93,8 @@ export const Auth: React.FC = () => {
                         )}
 
                         <div>
-                            <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
-                                {isLoginView ? 'Sign In' : 'Create Account'}
+                            <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-300 dark:disabled:bg-primary-800 disabled:cursor-not-allowed">
+                                {isLoading ? '...' : (isLoginView ? 'Sign In' : 'Create Account')}
                             </button>
                         </div>
                     </form>
@@ -74,7 +112,8 @@ export const Auth: React.FC = () => {
                         <div className="mt-6">
                             <button 
                                 onClick={handleGoogleSignIn}
-                                className="w-full flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-md font-medium text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                disabled={isLoading}
+                                className="w-full flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-md font-medium text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                             >
                                 <GoogleIcon className="w-6 h-6 mr-3" />
                                 Sign in with Google
@@ -84,10 +123,10 @@ export const Auth: React.FC = () => {
 
                     <div className="text-center mt-6">
                         <button 
-                            onClick={() => setIsLoginView(!isLoginView)} 
+                            onClick={toggleView} 
                             className="text-sm font-medium text-primary hover:text-primary-700"
                         >
-                            {isLoginView ? "Don't have an account? Create account" : 'Already have an account? Sign In'}
+                            {isLoginView ? "Don't have an account? Create one" : 'Already have an account? Sign In'}
                         </button>
                     </div>
                 </div>

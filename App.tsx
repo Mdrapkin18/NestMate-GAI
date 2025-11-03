@@ -104,11 +104,15 @@ const App: React.FC = () => {
 
     const handleUndo = useCallback(async () => {
         if (!lastAddedEntryId) return;
-        await deleteDoc(doc(db, "entries", lastAddedEntryId));
-        setLastAddedEntryId(null);
-        if (undoTimeoutRef.current) {
-            clearTimeout(undoTimeoutRef.current);
-            undoTimeoutRef.current = null;
+        try {
+            await deleteDoc(doc(db, "entries", lastAddedEntryId));
+            setLastAddedEntryId(null);
+            if (undoTimeoutRef.current) {
+                clearTimeout(undoTimeoutRef.current);
+                undoTimeoutRef.current = null;
+            }
+        } catch (error) {
+            console.error("Error undoing entry:", error);
         }
     }, [lastAddedEntryId]);
 
@@ -144,19 +148,27 @@ const App: React.FC = () => {
             updatedAt: serverTimestamp(),
         };
 
-        const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-        triggerUndo(docRef.id);
-        setIsLoggingFeed(false);
-        setActiveTab('home');
+        try {
+            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
+            triggerUndo(docRef.id);
+            setIsLoggingFeed(false);
+            setActiveTab('home');
+        } catch (error) {
+            console.error("Error starting timer:", error);
+        }
     }, [activeTimer, user, baby?.id]);
     
     const handleStopTimer = useCallback(async () => {
         if (!activeTimer) return;
         const entryRef = doc(db, "entries", activeTimer.id);
-        await updateDoc(entryRef, {
-            endedAt: new Date(),
-            updatedAt: serverTimestamp(),
-        });
+        try {
+            await updateDoc(entryRef, {
+                endedAt: new Date(),
+                updatedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Error stopping timer:", error);
+        }
     }, [activeTimer]);
 
     const handleLogBottle = useCallback(async (amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
@@ -177,10 +189,14 @@ const App: React.FC = () => {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
-        const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-        triggerUndo(docRef.id);
-        setIsLoggingFeed(false);
-        setActiveTab('home');
+        try {
+            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
+            triggerUndo(docRef.id);
+            setIsLoggingFeed(false);
+            setActiveTab('home');
+        } catch (error) {
+            console.error("Error logging bottle:", error);
+        }
     }, [baby?.id, user]);
     
     const renderContent = () => {
