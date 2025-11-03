@@ -39,7 +39,7 @@ const ActiveTimerCard: React.FC<{timer: TimerState, onStop: () => void}> = ({ ti
         <div className="bg-light-surface dark:bg-dark-surface p-4 rounded-lg border border-primary flex items-center justify-between shadow-md">
             <div className="flex items-center space-x-3">
                 <div className="text-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 <p className="text-2xl font-semibold tracking-wider text-light-text dark:text-dark-text">{formatDuration(elapsed)}</p>
             </div>
@@ -64,7 +64,7 @@ const BabyCard: React.FC<{baby: Baby, activeTimer: TimerState | null}> = ({ baby
                 </div>
                 <div>
                     <p className="font-bold text-lg">{baby.name}</p>
-                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{getAge(baby.dob)}</p>
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{getAge(baby.dob.toISOString())}</p>
                 </div>
             </div>
              {activeTimer && (
@@ -76,15 +76,15 @@ const BabyCard: React.FC<{baby: Baby, activeTimer: TimerState | null}> = ({ baby
 
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTimer, onStopTimer, onStartFeedClick, onStartSleepClick }) => {
-    const totalFeedsToday = entries.filter(e => e.type === 'feed' && new Date(e.startedAt).toDateString() === new Date().toDateString()).length;
+    const totalFeedsToday = entries.filter(e => 'kind' in e && e.startedAt.toDateString() === new Date().toDateString()).length;
     // This is a simplified duration calculation. A real app would sum up durations.
     const totalFeedTimeToday = "8 hr 45 min"; 
     const nextFeedIn = "1 hr 20 min";
 
-    const ageInMonths = getAgeInMonths(baby.dob);
+    const ageInMonths = getAgeInMonths(baby.dob.toISOString());
 
     const getFeedingRecText = () => {
-        const lastFeed = entries.find(e => e.type === 'feed' && e.endedAt);
+        const lastFeed = entries.find(e => 'kind' in e && e.endedAt);
         if (!lastFeed || !lastFeed.endedAt) {
             return "Log a feeding to get suggestions.";
         }
@@ -94,8 +94,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
         else if (ageInMonths < 6) { [minInterval, maxInterval] = [3, 4]; } 
         else { [minInterval, maxInterval] = [4, 5]; }
 
-        const nextFeedMin = new Date(lastFeed.endedAt + minInterval * 60 * 60 * 1000);
-        const nextFeedMax = new Date(lastFeed.endedAt + maxInterval * 60 * 60 * 1000);
+        const nextFeedMin = new Date(lastFeed.endedAt.getTime() + minInterval * 60 * 60 * 1000);
+        const nextFeedMax = new Date(lastFeed.endedAt.getTime() + maxInterval * 60 * 60 * 1000);
         
         const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -103,7 +103,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
     };
     
     const getSleepRecText = () => {
-        const lastSleep = entries.find(e => e.type === 'sleep' && e.endedAt);
+        const lastSleep = entries.find(e => 'category' in e && e.endedAt);
         if (!lastSleep || !lastSleep.endedAt) {
             return "Log a sleep session to get suggestions.";
         }
@@ -113,8 +113,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
         else if (ageInMonths < 6) { [minWake, maxWake] = [90, 120]; }
         else { [minWake, maxWake] = [120, 180]; }
         
-        const nextNapMin = new Date(lastSleep.endedAt + minWake * 60 * 1000);
-        const nextNapMax = new Date(lastSleep.endedAt + maxWake * 60 * 1000);
+        const nextNapMin = new Date(lastSleep.endedAt.getTime() + minWake * 60 * 1000);
+        const nextNapMax = new Date(lastSleep.endedAt.getTime() + maxWake * 60 * 1000);
 
         const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         

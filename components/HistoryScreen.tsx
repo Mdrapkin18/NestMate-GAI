@@ -9,7 +9,7 @@ interface HistoryScreenProps {
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ entries }) => {
     const groupedEntries = entries.reduce((acc, entry) => {
-        const dateKey = new Date(entry.startedAt).toDateString();
+        const dateKey = entry.startedAt.toDateString();
         if (!acc[dateKey]) {
             acc[dateKey] = [];
         }

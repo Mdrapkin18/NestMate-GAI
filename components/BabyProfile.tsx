@@ -25,15 +25,43 @@ const InputField: React.FC<{label: string, id: string, value: string | number, o
     </div>
 );
 
+// Fix: Helper function to format date for input[type=date]
+const formatDateForInput = (date: Date): string => {
+    if (date instanceof Date && !isNaN(date.getTime())) {
+        const year = date.getFullYear();
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    return '';
+};
+
 
 export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, onLogout }) => {
     const [formState, setFormState] = useState(baby);
     const [isSaved, setIsSaved] = useState(false);
 
+    // Fix: Properly handle changes for different input types to maintain type safety
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setIsSaved(false);
         const { id, value } = e.target;
-        setFormState(prev => ({ ...prev, [id]: value }));
+        
+        let newValue: any = value;
+        if (id === 'dob') {
+            // The value from a date input is 'YYYY-MM-DD'.
+            // To avoid timezone issues where new Date('YYYY-MM-DD') might be the day before,
+            // parsing with T00:00:00 treats it as local time.
+            newValue = new Date(value + 'T00:00:00');
+        } else if (e.target.type === 'number') {
+            // For number inputs, parse to float. Store undefined if empty.
+            newValue = value === '' ? undefined : parseFloat(value);
+            // Don't update state if parsing results in NaN for non-empty string
+            if (value !== '' && isNaN(newValue as number)) {
+                return;
+            }
+        }
+    
+        setFormState(prev => ({ ...prev, [id]: newValue }));
     };
 
     const handleSave = () => {
@@ -51,9 +79,9 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
             <div className="bg-light-surface dark:bg-dark-surface p-6 rounded-xl shadow-sm space-y-4">
                 <h2 className="text-lg font-semibold">Baby Profile</h2>
                 <InputField label="Name" id="name" value={formState.name} onChange={handleChange} placeholder="e.g., Keegan" />
-                <InputField label="Date of Birth" id="dob" value={formState.dob} onChange={handleChange} type="date" />
-                <InputField label="Weight (kg)" id="weightKg" value={formState.weightKg || ''} onChange={handleChange} type="number" placeholder="e.g., 4.5"/>
-                <InputField label="Height (cm)" id="heightCm" value={formState.heightCm || ''} onChange={handleChange} type="number" placeholder="e.g., 55" />
+                <InputField label="Date of Birth" id="dob" value={formatDateForInput(formState.dob)} onChange={handleChange} type="date" />
+                <InputField label="Weight (kg)" id="weightKg" value={formState.weightKg ?? ''} onChange={handleChange} type="number" placeholder="e.g., 4.5"/>
+                <InputField label="Height (cm)" id="heightCm" value={formState.heightCm ?? ''} onChange={handleChange} type="number" placeholder="e.g., 55" />
 
                 <button 
                     onClick={handleSave}

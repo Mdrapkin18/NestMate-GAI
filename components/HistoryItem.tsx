@@ -1,8 +1,8 @@
 import React from 'react';
-import { AnyEntry, FeedEntry, SleepEntry, DiaperEntry } from '../types';
+import { AnyEntry, Feed, Sleep } from '../types';
 import { FeedingIcon } from './icons/FeedingIcon';
 import { SleepIcon } from './icons/SleepIcon';
-import { ActivityIcon } from './icons/DiaperIcon';
+import { ActivityIcon } from './icons/DiaperIcon'; // Assuming this will be used for other types later
 import { formatDuration } from '../utils/helpers';
 
 interface HistoryItemProps {
@@ -10,55 +10,46 @@ interface HistoryItemProps {
 }
 
 const getEntryDetails = (entry: AnyEntry): { icon: React.ReactNode; title: string; details: string } => {
-    const time = new Date(entry.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const time = entry.startedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    switch (entry.type) {
-        case 'feed': {
-            const feed = entry as FeedEntry;
-            const duration = feed.endedAt && feed.startedAt ? formatDuration(feed.endedAt - feed.startedAt) : 'In progress';
-            if (feed.mode === 'breast') {
+    if ('kind' in entry) { // It's a Feed entry
+        const feed = entry as Feed;
+        const duration = feed.endedAt && feed.startedAt ? formatDuration(feed.endedAt.getTime() - feed.startedAt.getTime()) : 'In progress';
+        
+        switch(feed.kind) {
+            case 'nursing':
                 return {
                     icon: <FeedingIcon className="w-5 h-5 text-primary" />,
                     title: `Nursing (${feed.side})`,
                     details: `${time} · ${duration}`
                 };
-            }
-            if (feed.mode === 'bottle') {
-                const unit = feed.amountMl && feed.amountMl > 200 ? 'ml' : 'ml'; // simple logic for demo
-                const displayAmount = feed.amountMl?.toFixed(0);
+            case 'bottle':
+                const displayAmount = feed.amountOz?.toFixed(1);
                 return {
                     icon: <FeedingIcon className="w-5 h-5 text-primary" />,
                     title: `Bottle Feed`,
-                    details: `${time} · ${displayAmount}${unit} ${feed.bottleType}`
+                    details: `${time} · ${displayAmount}oz`
                 };
-            }
-             return {
-                icon: <FeedingIcon className="w-5 h-5 text-primary" />,
-                title: 'Pumped',
-                details: `${time} · ${duration}`
-            };
+            case 'pump':
+                 return {
+                    icon: <FeedingIcon className="w-5 h-5 text-primary" />,
+                    title: 'Pumped',
+                    details: `${time} · ${duration}`
+                };
         }
-        case 'sleep': {
-            const sleep = entry as SleepEntry;
-            const sleepDuration = sleep.endedAt && sleep.startedAt ? formatDuration(sleep.endedAt - sleep.startedAt) : 'In progress';
-            return {
-                icon: <SleepIcon className="w-5 h-5 text-indigo-500" />,
-                title: 'Sleep',
-                details: `${time} · ${sleepDuration}`
-            };
-        }
-        case 'diaper': {
-            const diaper = entry as DiaperEntry;
-            const diaperDetails = [diaper.wet && 'Wet', diaper.dirty && 'Dirty'].filter(Boolean).join(' & ');
-            return {
-                icon: <ActivityIcon className="w-5 h-5 text-amber-500" />,
-                title: 'Diaper',
-                details: `${time} · ${diaperDetails}`
-            };
-        }
-        default:
-            return { icon: null, title: 'Unknown Entry', details: time };
     }
+
+    if ('category' in entry) { // It's a Sleep entry
+        const sleep = entry as Sleep;
+        const sleepDuration = sleep.endedAt && sleep.startedAt ? formatDuration(sleep.endedAt.getTime() - sleep.startedAt.getTime()) : 'In progress';
+        return {
+            icon: <SleepIcon className="w-5 h-5 text-indigo-500" />,
+            title: `Sleep (${sleep.category})`,
+            details: `${time} · ${sleepDuration}`
+        };
+    }
+    
+    return { icon: null, title: 'Unknown Entry', details: time };
 };
 
 export const HistoryItem: React.FC<HistoryItemProps> = ({ entry }) => {

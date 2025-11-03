@@ -3,36 +3,35 @@ import { v4 as uuidv4 } from 'uuid';
 import { HomeScreen } from './components/HomeScreen';
 import { Auth } from './components/Auth';
 import { BottomNav } from './components/BottomNav';
-import { BabyProfile } from './components/BabyProfile';
+import { SettingsScreen } from './components/SettingsScreen';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { StartFeedScreen } from './components/StartFeedScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { UndoBanner } from './components/UndoBanner';
-import { AnyEntry, TimerState, Baby, BreastSide, ActiveTab, FeedEntry, BottleType } from './types';
+// Fix: Import 'Feed' instead of 'FeedEntry' and consolidate imports
+import { AnyEntry, TimerState, Baby, BreastSide, ActiveTab, BottleType, Feed } from './types';
 
-
-// FIX: Add `as const` to string literal properties to satisfy the strict types of `AnyEntry`.
+// This is a mock of what would come from Firebase
 const initialEntries: AnyEntry[] = [
-    { id: '1', type: 'feed' as const, mode: 'breast' as const, side: 'left' as const, startedAt: Date.now() - 3 * 60 * 60 * 1000, endedAt: Date.now() - 3 * 60 * 60 * 1000 + 10 * 60 * 1000 },
-    { id: '2', type: 'sleep' as const, category: 'nap' as const, startedAt: Date.now() - 2 * 60 * 60 * 1000, endedAt: Date.now() - 2 * 60 * 60 * 1000 + 45 * 60 * 1000 },
-].sort((a,b) => b.startedAt - a.startedAt);
+    // Reworking mocks to be compatible with new Zod types (using Date objects)
+    // Note: This data will eventually be fetched from Firestore
+].sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime());
 
 
 const App: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [appState, setAppState] = useState<'splash' | 'auth' | 'main'>('splash');
     const [baby, setBaby] = useState<Baby>({
+        id: uuidv4(),
+        familyId: uuidv4(),
         name: 'Keegan',
-        dob: '2024-05-15',
-        weightKg: 4.5,
-        heightCm: 55,
+        dob: new Date('2024-05-15'),
     });
     const [entries, setEntries] = useState<AnyEntry[]>(initialEntries);
     const [activeTimer, setActiveTimer] = useState<TimerState | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>('home');
     const [isLoggingFeed, setIsLoggingFeed] = useState(false);
     const [lastAddedEntryId, setLastAddedEntryId] = useState<string | null>(null);
-    // FIX: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>` for browser compatibility.
     const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const triggerUndo = (entryId: string) => {
@@ -57,7 +56,7 @@ const App: React.FC = () => {
 
 
     useEffect(() => {
-        const timer = setTimeout(() => setAppState('auth'), 2000); // Show splash for 2s
+        const timer = setTimeout(() => setAppState('auth'), 2000);
         return () => clearTimeout(timer);
     }, []);
 
@@ -96,54 +95,67 @@ const App: React.FC = () => {
         };
         setActiveTimer(newTimer);
         localStorage.setItem('activeTimer', JSON.stringify(newTimer));
-        setIsLoggingFeed(false); // Close the feed screen
-        setActiveTab('home'); // Go back to home screen
+        setIsLoggingFeed(false);
+        setActiveTab('home');
     }, [activeTimer]);
     
     const handleStopTimer = useCallback(() => {
         if (!activeTimer) return;
 
+        const now = new Date();
+        const startedAt = new Date(activeTimer.startedAt);
+        
         const newEntry: AnyEntry = activeTimer.type === 'feed'
             ? {
                 id: activeTimer.id,
-                type: 'feed',
-                mode: 'breast', // Defaulting to breast for timers
+                babyId: baby.id,
+                kind: 'nursing',
                 side: activeTimer.side,
-                startedAt: activeTimer.startedAt,
-                endedAt: Date.now(),
+                startedAt,
+                endedAt: now,
+                createdBy: 'user-id-placeholder',
+                createdAt: now,
+                updatedAt: now,
             }
             : {
                 id: activeTimer.id,
-                type: 'sleep',
-                category: 'nap',
-                startedAt: activeTimer.startedAt,
-                endedAt: Date.now(),
+                babyId: baby.id,
+                category: 'nap', // Defaulting
+                startedAt,
+                endedAt: now,
+                createdBy: 'user-id-placeholder',
+                createdAt: now,
+                updatedAt: now,
             };
 
-        setEntries(prev => [newEntry, ...prev].sort((a,b) => b.startedAt - a.startedAt));
+        setEntries(prev => [newEntry, ...prev].sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime()));
         triggerUndo(newEntry.id);
         setActiveTimer(null);
         localStorage.removeItem('activeTimer');
-    }, [activeTimer]);
+    }, [activeTimer, baby.id]);
 
     const handleLogBottle = useCallback((amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
-        // Convert oz to ml for consistent storage
-        const amountMl = unit === 'oz' ? amount * 29.5735 : amount;
-        const now = Date.now();
-        const newEntry: FeedEntry = {
+        // Zod schema expects amountOz. In a real app, you'd handle unit conversion properly.
+        const amountOz = unit === 'ml' ? amount / 29.5735 : amount;
+        const now = new Date();
+
+        // Fix: Use the imported 'Feed' type
+        const newEntry: Feed = {
             id: uuidv4(),
-            type: 'feed',
-            mode: 'bottle',
-            amountMl,
-            bottleType,
+            babyId: baby.id,
+            kind: 'bottle',
+            amountOz,
             startedAt: now,
             endedAt: now, // For bottle logs, start and end are the same
+            createdBy: 'user-id-placeholder',
+            createdAt: now,
+            updatedAt: now,
         };
-        setEntries(prev => [newEntry, ...prev].sort((a, b) => b.startedAt - a.startedAt));
+        setEntries(prev => [newEntry, ...prev].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()));
         triggerUndo(newEntry.id);
-        setIsLoggingFeed(false); // Close the feed screen
-        setActiveTab('home'); // Go back home
-    }, []);
+        setIsLoggingFeed(false);
+        setActiveTab('home');
+    }, [baby.id]);
     
     const renderContent = () => {
         if (isLoggingFeed) {
@@ -174,7 +186,7 @@ const App: React.FC = () => {
             case 'history':
                 return <HistoryScreen entries={entries} />;
             case 'settings':
-                return <BabyProfile 
+                return <SettingsScreen 
                     baby={baby} 
                     onUpdateBaby={setBaby} 
                     onLogout={() => setAppState('auth')}
