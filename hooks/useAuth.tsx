@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, createContext, ReactNode } from 'react';
 import { User, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile, userProfileSchema } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
