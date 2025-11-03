@@ -117,7 +117,6 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       await signInWithEmailAndPassword(auth, email, password);
       console.log(`[useAuth] Email sign-in successful for: ${email}`);
       return null;
-      // FIX: Added curly braces to the catch block to correctly scope the error variable and fix multiple syntax errors.
     } catch (error: any) {
       console.error("[useAuth] Error signing in with email:", error);
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
