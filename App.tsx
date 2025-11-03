@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { HomeScreen } from './components/HomeScreen';
 import { Auth } from './components/Auth';
@@ -6,20 +6,16 @@ import { BottomNav } from './components/BottomNav';
 import { BabyProfile } from './components/BabyProfile';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { StartFeedScreen } from './components/StartFeedScreen';
-import { AnyEntry, TimerState, Baby, BreastSide, ActiveTab } from './types';
+import { HistoryScreen } from './components/HistoryScreen';
+import { UndoBanner } from './components/UndoBanner';
+import { AnyEntry, TimerState, Baby, BreastSide, ActiveTab, FeedEntry, BottleType } from './types';
 
 
+// FIX: Add `as const` to string literal properties to satisfy the strict types of `AnyEntry`.
 const initialEntries: AnyEntry[] = [
-    { id: '1', type: 'feed', mode: 'breast', side: 'left', startedAt: Date.now() - 3 * 60 * 60 * 1000, endedAt: Date.now() - 3 * 60 * 60 * 1000 + 10 * 60 * 1000 },
-    { id: '2', type: 'sleep', category: 'nap', startedAt: Date.now() - 2 * 60 * 60 * 1000, endedAt: Date.now() - 2 * 60 * 60 * 1000 + 45 * 60 * 1000 },
-];
-
-const PlaceholderScreen: React.FC<{title: string}> = ({title}) => (
-    <div className="p-4">
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <p className="mt-4 text-gray-500">This screen is under construction.</p>
-    </div>
-);
+    { id: '1', type: 'feed' as const, mode: 'breast' as const, side: 'left' as const, startedAt: Date.now() - 3 * 60 * 60 * 1000, endedAt: Date.now() - 3 * 60 * 60 * 1000 + 10 * 60 * 1000 },
+    { id: '2', type: 'sleep' as const, category: 'nap' as const, startedAt: Date.now() - 2 * 60 * 60 * 1000, endedAt: Date.now() - 2 * 60 * 60 * 1000 + 45 * 60 * 1000 },
+].sort((a,b) => b.startedAt - a.startedAt);
 
 
 const App: React.FC = () => {
@@ -35,6 +31,30 @@ const App: React.FC = () => {
     const [activeTimer, setActiveTimer] = useState<TimerState | null>(null);
     const [activeTab, setActiveTab] = useState<ActiveTab>('home');
     const [isLoggingFeed, setIsLoggingFeed] = useState(false);
+    const [lastAddedEntryId, setLastAddedEntryId] = useState<string | null>(null);
+    // FIX: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>` for browser compatibility.
+    const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const triggerUndo = (entryId: string) => {
+        if (undoTimeoutRef.current) {
+            clearTimeout(undoTimeoutRef.current);
+        }
+        setLastAddedEntryId(entryId);
+        undoTimeoutRef.current = setTimeout(() => {
+            setLastAddedEntryId(null);
+        }, 10000); // 10 seconds
+    };
+
+    const handleUndo = useCallback(() => {
+        if (!lastAddedEntryId) return;
+        setEntries(prev => prev.filter(entry => entry.id !== lastAddedEntryId));
+        setLastAddedEntryId(null);
+        if (undoTimeoutRef.current) {
+            clearTimeout(undoTimeoutRef.current);
+            undoTimeoutRef.current = null;
+        }
+    }, [lastAddedEntryId]);
+
 
     useEffect(() => {
         const timer = setTimeout(() => setAppState('auth'), 2000); // Show splash for 2s
@@ -83,8 +103,6 @@ const App: React.FC = () => {
     const handleStopTimer = useCallback(() => {
         if (!activeTimer) return;
 
-        const duration = Date.now() - activeTimer.startedAt;
-
         const newEntry: AnyEntry = activeTimer.type === 'feed'
             ? {
                 id: activeTimer.id,
@@ -103,13 +121,33 @@ const App: React.FC = () => {
             };
 
         setEntries(prev => [newEntry, ...prev].sort((a,b) => b.startedAt - a.startedAt));
+        triggerUndo(newEntry.id);
         setActiveTimer(null);
         localStorage.removeItem('activeTimer');
     }, [activeTimer]);
+
+    const handleLogBottle = useCallback((amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
+        // Convert oz to ml for consistent storage
+        const amountMl = unit === 'oz' ? amount * 29.5735 : amount;
+        const now = Date.now();
+        const newEntry: FeedEntry = {
+            id: uuidv4(),
+            type: 'feed',
+            mode: 'bottle',
+            amountMl,
+            bottleType,
+            startedAt: now,
+            endedAt: now, // For bottle logs, start and end are the same
+        };
+        setEntries(prev => [newEntry, ...prev].sort((a, b) => b.startedAt - a.startedAt));
+        triggerUndo(newEntry.id);
+        setIsLoggingFeed(false); // Close the feed screen
+        setActiveTab('home'); // Go back home
+    }, []);
     
     const renderContent = () => {
         if (isLoggingFeed) {
-            return <StartFeedScreen onBack={() => setIsLoggingFeed(false)} onStartNursing={handleStartTimer} />;
+            return <StartFeedScreen onBack={() => setIsLoggingFeed(false)} onStartNursing={handleStartTimer} onLogBottle={handleLogBottle}/>;
         }
         
         switch(activeTab) {
@@ -123,11 +161,18 @@ const App: React.FC = () => {
                     onStartSleepClick={() => handleStartTimer('sleep')}
                 />;
             case 'feeding':
-                return <StartFeedScreen onBack={() => setActiveTab('home')} onStartNursing={handleStartTimer} />;
+                return <StartFeedScreen onBack={() => setActiveTab('home')} onStartNursing={handleStartTimer} onLogBottle={handleLogBottle}/>;
             case 'sleep':
-                return <PlaceholderScreen title="Sleep"/>;
+                 return <HomeScreen 
+                    baby={baby} 
+                    entries={entries}
+                    activeTimer={activeTimer}
+                    onStopTimer={handleStopTimer}
+                    onStartFeedClick={() => setIsLoggingFeed(true)}
+                    onStartSleepClick={() => handleStartTimer('sleep')}
+                />;
             case 'history':
-                return <PlaceholderScreen title="History"/>;
+                return <HistoryScreen entries={entries} />;
             case 'settings':
                 return <BabyProfile 
                     baby={baby} 
@@ -153,6 +198,7 @@ const App: React.FC = () => {
                 <main className="pb-24">
                     {renderContent()}
                 </main>
+                {lastAddedEntryId && <UndoBanner onUndo={handleUndo} />}
                 {!isLoggingFeed && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
             </div>
         </div>

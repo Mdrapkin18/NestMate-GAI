@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { FeedMode, BreastSide } from '../types';
+import { FeedMode, BreastSide, BottleType } from '../types';
+import { FeedingIcon } from './icons/FeedingIcon';
 
 interface StartFeedScreenProps {
   onBack: () => void;
-  onStartNursing: (type: 'feed' | 'sleep', side?: BreastSide) => void;
+  onStartNursing: (type: 'feed', side?: BreastSide) => void;
+  onLogBottle: (amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => void;
 }
 
 const TabButton: React.FC<{label: string, isActive: boolean, onClick: () => void}> = ({ label, isActive, onClick }) => (
@@ -31,16 +33,41 @@ const Toggle: React.FC<{label: string, enabled: boolean, setEnabled: (enabled: b
     </div>
 );
 
-export const StartFeedScreen: React.FC<StartFeedScreenProps> = ({ onBack, onStartNursing }) => {
+const BottleTypeButton: React.FC<{label: string, isActive: boolean, onClick: () => void}> = ({ label, isActive, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors border ${
+            isActive
+            ? 'bg-primary-100 dark:bg-primary-900 border-primary text-primary dark:text-primary-200'
+            : 'bg-transparent border-gray-300 dark:border-gray-600 text-light-text-secondary dark:text-dark-text-secondary'
+        }`}
+    >
+        {label}
+    </button>
+);
+
+export const StartFeedScreen: React.FC<StartFeedScreenProps> = ({ onBack, onStartNursing, onLogBottle }) => {
     const [mode, setMode] = useState<FeedMode>('breast');
+    
+    // Nursing state
     const [trackLatch, setTrackLatch] = useState(false);
     const [trackPain, setTrackPain] = useState(false);
 
-    const handleStart = () => {
-        // For now, we only implement starting a nursing timer from this screen.
-        // A more complex implementation would handle bottle and pump forms.
+    // Bottle state
+    const [amount, setAmount] = useState('');
+    const [unit, setUnit] = useState<'oz' | 'ml'>('oz');
+    const [bottleType, setBottleType] = useState<BottleType>('breastmilk');
+
+    const handleAction = () => {
         if (mode === 'breast') {
-            onStartNursing('feed', 'left'); // Default to left side
+            onStartNursing('feed', 'left'); // Default to left side for simplicity
+        } else if (mode === 'bottle') {
+            const parsedAmount = parseFloat(amount);
+            if (!isNaN(parsedAmount) && parsedAmount > 0) {
+                onLogBottle(parsedAmount, unit, bottleType);
+            } else {
+                alert('Please enter a valid amount.');
+            }
         } else {
             alert(`${mode.charAt(0).toUpperCase() + mode.slice(1)} logging is not implemented yet.`);
         }
@@ -50,7 +77,7 @@ export const StartFeedScreen: React.FC<StartFeedScreenProps> = ({ onBack, onStar
         <div className="p-4 space-y-6">
             <header className="relative flex items-center justify-center">
                 <button onClick={onBack} className="absolute left-0">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                     <svg xmlns="http://www.w.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <h1 className="text-xl font-bold text-light-text dark:text-dark-text">Start a Feed</h1>
             </header>
@@ -70,7 +97,29 @@ export const StartFeedScreen: React.FC<StartFeedScreenProps> = ({ onBack, onStar
                 )}
                 
                 {mode === 'bottle' && (
-                     <p className="text-center text-gray-500 py-8">Bottle logging form coming soon!</p>
+                     <div className="space-y-4 pt-4">
+                         <div className="flex items-center space-x-2">
+                             <input
+                                 type="number"
+                                 value={amount}
+                                 onChange={(e) => setAmount(e.target.value)}
+                                 placeholder="Amount"
+                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text"
+                             />
+                             <div className="flex border border-gray-300 dark:border-gray-600 rounded-md">
+                                 <button onClick={() => setUnit('oz')} className={`px-3 py-2 text-sm ${unit === 'oz' ? 'bg-primary-100 dark:bg-primary-900 text-primary' : ''}`}>oz</button>
+                                 <button onClick={() => setUnit('ml')} className={`px-3 py-2 text-sm ${unit === 'ml' ? 'bg-primary-100 dark:bg-primary-900 text-primary' : ''}`}>ml</button>
+                             </div>
+                         </div>
+                         <div>
+                             <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">Type</label>
+                             <div className="flex items-center space-x-2">
+                                <BottleTypeButton label="Breastmilk" isActive={bottleType === 'breastmilk'} onClick={() => setBottleType('breastmilk')} />
+                                <BottleTypeButton label="Formula" isActive={bottleType === 'formula'} onClick={() => setBottleType('formula')} />
+                                <BottleTypeButton label="Mixed" isActive={bottleType === 'mixed'} onClick={() => setBottleType('mixed')} />
+                             </div>
+                         </div>
+                     </div>
                 )}
                 
                 {mode === 'pump' && (
@@ -78,10 +127,10 @@ export const StartFeedScreen: React.FC<StartFeedScreenProps> = ({ onBack, onStar
                 )}
                 
                 <button 
-                    onClick={handleStart}
+                    onClick={handleAction}
                     className="w-full bg-primary hover:bg-primary-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
                 >
-                    Start
+                    {mode === 'bottle' ? 'Log Bottle' : 'Start'}
                 </button>
             </div>
         </div>

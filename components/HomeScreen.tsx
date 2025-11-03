@@ -3,7 +3,7 @@ import { AnyEntry, Baby, TimerState } from '../types';
 import { FeedingIcon } from './icons/FeedingIcon';
 import { SleepIcon } from './icons/SleepIcon';
 import { ActivityIcon } from './icons/DiaperIcon';
-import { getAge, formatDuration } from '../utils/helpers';
+import { getAge, formatDuration, getAgeInMonths } from '../utils/helpers';
 import { useTimer } from '../hooks/useTimer';
 
 interface HomeScreenProps {
@@ -81,6 +81,46 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
     const totalFeedTimeToday = "8 hr 45 min"; 
     const nextFeedIn = "1 hr 20 min";
 
+    const ageInMonths = getAgeInMonths(baby.dob);
+
+    const getFeedingRecText = () => {
+        const lastFeed = entries.find(e => e.type === 'feed' && e.endedAt);
+        if (!lastFeed || !lastFeed.endedAt) {
+            return "Log a feeding to get suggestions.";
+        }
+
+        let minInterval, maxInterval;
+        if (ageInMonths < 3) { [minInterval, maxInterval] = [2, 3]; } 
+        else if (ageInMonths < 6) { [minInterval, maxInterval] = [3, 4]; } 
+        else { [minInterval, maxInterval] = [4, 5]; }
+
+        const nextFeedMin = new Date(lastFeed.endedAt + minInterval * 60 * 60 * 1000);
+        const nextFeedMax = new Date(lastFeed.endedAt + maxInterval * 60 * 60 * 1000);
+        
+        const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        return `Next feed: ${formatTime(nextFeedMin)} - ${formatTime(nextFeedMax)}`;
+    };
+    
+    const getSleepRecText = () => {
+        const lastSleep = entries.find(e => e.type === 'sleep' && e.endedAt);
+        if (!lastSleep || !lastSleep.endedAt) {
+            return "Log a sleep session to get suggestions.";
+        }
+
+        let minWake, maxWake;
+        if (ageInMonths < 3) { [minWake, maxWake] = [60, 90]; }
+        else if (ageInMonths < 6) { [minWake, maxWake] = [90, 120]; }
+        else { [minWake, maxWake] = [120, 180]; }
+        
+        const nextNapMin = new Date(lastSleep.endedAt + minWake * 60 * 1000);
+        const nextNapMax = new Date(lastSleep.endedAt + maxWake * 60 * 1000);
+
+        const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        return `Next nap: ${formatTime(nextNapMin)} - ${formatTime(nextNapMax)}`;
+    };
+
     return (
         <div className="p-4 space-y-6">
             <header>
@@ -96,6 +136,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
                     <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">{totalFeedTimeToday}</p>
                 </StatCard>
                  <StatCard title="Next feeding in" value={nextFeedIn} />
+            </div>
+
+            <div>
+                <h3 className="text-lg font-semibold mb-4 text-light-text dark:text-dark-text">AI Suggestions</h3>
+                <div className="bg-light-surface dark:bg-dark-surface p-4 rounded-xl shadow-sm space-y-3">
+                    <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary-100 dark:bg-primary-900 rounded-full">
+                            <FeedingIcon className="w-4 h-4 text-primary dark:text-primary-200" />
+                        </div>
+                        <p className="text-sm text-light-text dark:text-dark-text">{getFeedingRecText()}</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                         <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-primary-100 dark:bg-primary-900 rounded-full">
+                            <SleepIcon className="w-4 h-4 text-primary dark:text-primary-200" />
+                        </div>
+                        <p className="text-sm text-light-text dark:text-dark-text">{getSleepRecText()}</p>
+                    </div>
+                     <p className="text-xs text-center text-light-text-secondary dark:text-dark-text-secondary pt-3 mt-2 border-t border-gray-200 dark:border-gray-700">
+                        Disclaimer: These are general suggestions, not medical advice.
+                    </p>
+                </div>
             </div>
 
             <div>
