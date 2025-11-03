@@ -3,6 +3,7 @@ import { User, onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAn
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { UserProfile, userProfileSchema } from '../types';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
@@ -37,12 +38,16 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
             setUserProfile(null); // Handle invalid data case
           }
         } else {
-          // Create a profile for a new user
+          // Create a profile for a new user.
+          // This is their first time, so we also create a new family for them.
+          const newFamilyId = uuidv4();
           const newUserProfile: UserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email!,
             displayName: firebaseUser.displayName || '',
-            role: 'owner', // First user is the owner
+            role: 'owner', // First user is the owner of the family
+            familyId: newFamilyId,
+            babies: [], // Explicitly initialize babies array for new users
           };
           await setDoc(userDocRef, newUserProfile);
           setUserProfile(newUserProfile);

@@ -10,12 +10,13 @@ import { HistoryScreen } from './components/HistoryScreen';
 import { UndoBanner } from './components/UndoBanner';
 import { AnyEntry, TimerState, Baby, Feed, ActiveTab, BreastSide, BottleType } from './types';
 import { useAuth } from './hooks/useAuth';
-import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './services/firebase';
-import { feedSchema, sleepSchema } from './types';
+import { feedSchema, sleepSchema, babySchema } from './types';
 import { AIAssistant } from './components/AIAssistant';
 import { generateBabyContext } from './utils/contextHelper';
 import { AIIcon } from './components/icons/AIIcon';
+import { CreateBabyScreen } from './components/CreateBabyScreen';
 
 // Helper to convert our app objects to what Firestore expects (e.g., handling dates)
 const toFirestore = (data: any) => {
@@ -35,15 +36,10 @@ const toFirestore = (data: any) => {
 
 const App: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = useState(false);
-    const { user, loading: authLoading } = useAuth();
+    const { user, userProfile, loading: authLoading } = useAuth();
     
-    // This will be replaced by a proper baby selection UI
-    const [baby, setBaby] = useState<Baby>({
-        id: 'mock-baby-id-1',
-        familyId: 'mock-family-id-1',
-        name: 'Keegan',
-        dob: new Date('2024-05-15'),
-    });
+    const [activeBaby, setActiveBaby] = useState<Baby | null>(null);
+    const [babyLoading, setBabyLoading] = useState(true);
 
     const [entries, setEntries] = useState<AnyEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = useState(true);
@@ -54,9 +50,9 @@ const App: React.FC = () => {
     const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
 
     const babyContext = useMemo(() => {
-        if (!baby) return '';
-        return generateBabyContext(baby, entries);
-    }, [baby, entries]);
+        if (!activeBaby) return '';
+        return generateBabyContext(activeBaby, entries);
+    }, [activeBaby, entries]);
 
 
     // Derived state for active timer
@@ -74,14 +70,106 @@ const App: React.FC = () => {
     }, [entries]);
 
     useEffect(() => {
-        if (!user || !baby?.id) {
+        if (!userProfile) {
+            if (!authLoading) {
+                setBabyLoading(false);
+            }
+            return;
+        }
+
+        const loadBabyProfile = async () => {
+            setBabyLoading(true);
+            if (!userProfile.babies || userProfile.babies.length === 0) {
+                setActiveBaby(null);
+                setBabyLoading(false);
+                return;
+            }
+
+            const babyId = userProfile.babies[0];
+            const babyDocRef = doc(db, 'babies', babyId);
+            try {
+                const babyDoc = await getDoc(babyDocRef);
+                if (babyDoc.exists()) {
+                    const parsedBaby = babySchema.safeParse({ id: babyDoc.id, ...babyDoc.data() });
+                    if (parsedBaby.success) {
+                        setActiveBaby(parsedBaby.data);
+                    } else {
+                        console.error("Failed to parse baby data:", parsedBaby.error);
+                        setActiveBaby(null);
+                    }
+                } else {
+                    console.warn(`Baby with id ${babyId} not found in 'babies' collection.`);
+                    setActiveBaby(null);
+                }
+            } catch (error) {
+                console.error("Error fetching baby profile:", error);
+            } finally {
+                setBabyLoading(false);
+            }
+        };
+
+        loadBabyProfile();
+    }, [userProfile, authLoading]);
+
+    const handleCreateBaby = useCallback(async (name: string, dob: Date) => {
+        if (!user || !userProfile || !userProfile.familyId) {
+            throw new Error("User or profile not available to create baby.");
+        }
+
+        const babyId = uuidv4();
+        const newBaby: Baby = {
+            id: babyId,
+            familyId: userProfile.familyId,
+            name,
+            dob,
+        };
+
+        const babyDocRef = doc(db, 'babies', babyId);
+        const userDocRef = doc(db, 'users', user.uid);
+
+        try {
+            const { id, ...babyData } = newBaby;
+            await setDoc(babyDocRef, babyData);
+            
+            await updateDoc(userDocRef, {
+                babies: arrayUnion(babyId)
+            });
+            
+            setActiveBaby(newBaby);
+
+        } catch (error) {
+            console.error("Error creating baby:", error);
+            throw error;
+        }
+    }, [user, userProfile]);
+
+    useEffect(() => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('firebase-messaging-sw.js')
+          .then(registration => {
+            console.log('Service Worker registered successfully from App.tsx with scope:', registration.scope);
+          })
+          .catch(error => {
+            console.error('Service Worker registration failed from App.tsx:', error);
+          });
+      }
+    }, []);
+
+    useEffect(() => {
+        if (!user || !activeBaby?.id || !userProfile?.familyId) {
             setEntries([]);
             setEntriesLoading(false);
             return;
         }
+
         setEntriesLoading(true);
         const entriesRef = collection(db, "entries");
-        const q = query(entriesRef, where("babyId", "==", baby.id), orderBy("startedAt", "desc"));
+        const q = query(
+            entriesRef, 
+            where("familyId", "==", userProfile.familyId),
+            where("babyId", "==", activeBaby.id), 
+            orderBy("startedAt", "desc")
+        );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const fetchedEntries: AnyEntry[] = [];
@@ -103,7 +191,7 @@ const App: React.FC = () => {
         });
 
         return () => unsubscribe();
-    }, [user, baby?.id]);
+    }, [user, activeBaby?.id, userProfile?.familyId]);
 
 
     const triggerUndo = (entryId: string) => {
@@ -133,13 +221,15 @@ const App: React.FC = () => {
         setIsDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
     }, []);
 
+
+
     useEffect(() => {
         document.documentElement.classList.toggle('dark', isDarkMode);
         localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
     }, [isDarkMode]);
 
     const handleStartTimer = useCallback(async (type: 'feed' | 'sleep', side?: BreastSide) => {
-        if (activeTimer || !user) return;
+        if (activeTimer || !user || !userProfile?.familyId || !activeBaby) return;
 
         const now = new Date();
         const newEntryData = type === 'feed' ? {
@@ -151,7 +241,8 @@ const App: React.FC = () => {
 
         const docPayload = {
             ...newEntryData,
-            babyId: baby.id,
+            babyId: activeBaby.id,
+            familyId: userProfile.familyId,
             startedAt: now,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
@@ -166,7 +257,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error starting timer:", error);
         }
-    }, [activeTimer, user, baby?.id]);
+    }, [activeTimer, user, activeBaby, userProfile?.familyId]);
     
     const handleStopTimer = useCallback(async () => {
         if (!activeTimer) return;
@@ -182,11 +273,12 @@ const App: React.FC = () => {
     }, [activeTimer]);
 
     const handleLogBottle = useCallback(async (amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
-        if (!user) return;
+        if (!user || !userProfile?.familyId || !activeBaby) return;
         const amountOz = unit === 'ml' ? amount / 29.5735 : amount;
         const now = new Date();
         const newEntry: Omit<Feed, 'id' | 'createdAt' | 'updatedAt' | 'startedAt' | 'endedAt'> = {
-            babyId: baby.id,
+            babyId: activeBaby.id,
+            familyId: userProfile.familyId,
             kind: 'bottle',
             amountOz,
             createdBy: user.uid,
@@ -207,7 +299,7 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("Error logging bottle:", error);
         }
-    }, [baby?.id, user]);
+    }, [activeBaby, user, userProfile?.familyId]);
     
     const renderContent = () => {
         if (isLoggingFeed) {
@@ -217,7 +309,7 @@ const App: React.FC = () => {
         switch(activeTab) {
             case 'home':
                 return <HomeScreen 
-                    baby={baby} 
+                    baby={activeBaby!} 
                     entries={entries}
                     activeTimer={activeTimer}
                     onStopTimer={handleStopTimer}
@@ -228,7 +320,7 @@ const App: React.FC = () => {
                 return <StartFeedScreen onBack={() => setActiveTab('home')} onStartNursing={handleStartTimer} onLogBottle={handleLogBottle}/>;
             case 'sleep':
                  return <HomeScreen 
-                    baby={baby} 
+                    baby={activeBaby!} 
                     entries={entries}
                     activeTimer={activeTimer}
                     onStopTimer={handleStopTimer}
@@ -239,15 +331,15 @@ const App: React.FC = () => {
                 return <HistoryScreen entries={entries} />;
             case 'settings':
                 return <SettingsScreen 
-                    baby={baby} 
-                    onUpdateBaby={setBaby} 
+                    baby={activeBaby!} 
+                    onUpdateBaby={setActiveBaby} 
                 />;
             default:
                 return null;
         }
     }
     
-    if (authLoading) {
+    if (authLoading || babyLoading) {
         return <WelcomeScreen />;
     }
 
@@ -255,9 +347,8 @@ const App: React.FC = () => {
         return <Auth />;
     }
 
-    if (!baby) {
-        // In a real app, this would be a "Create your first baby profile" screen
-        return <div className="p-8 text-center">Please set up a baby profile in settings.</div>
+    if (!activeBaby) {
+        return <CreateBabyScreen onSave={handleCreateBaby} />;
     }
 
     return (

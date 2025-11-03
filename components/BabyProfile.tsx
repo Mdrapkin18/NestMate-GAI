@@ -62,12 +62,10 @@ export const BabyProfile: React.FC<BabyProfileProps> = ({ baby, onUpdateBaby, on
         setIsSaving(true);
         setSaveMessage('');
         try {
-            // In a real app, baby profiles would be in a 'babies' collection
-            // For now, we assume a static update path.
-            // const babyRef = doc(db, "babies", baby.id);
-            // await updateDoc(babyRef, { ...formState });
+            const babyRef = doc(db, "babies", baby.id);
+            const { id, ...saveData } = formState;
+            await updateDoc(babyRef, saveData);
             
-            // For this demo, we just update the local state passed from App.tsx
             onUpdateBaby(formState);
             setSaveMessage('Saved!');
         } catch (error) {

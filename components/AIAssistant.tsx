@@ -1,7 +1,8 @@
 
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { LiveServerMessage, LiveSession } from '@google/genai';
+import { LiveServerMessage } from '@google/genai';
 import { ChatMessage } from '../types';
 import { generateTextWithGoogleSearch, connectToLiveAPI, createPcmBlob } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/helpers';
@@ -26,7 +27,9 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
     const [isLoading, setIsLoading] = useState(false);
     const [liveState, setLiveState] = useState<LiveState>(LiveState.IDLE);
 
-    const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+    // FIX: The LiveSession type is not exported from @google/genai.
+    // The type is inferred from the return type of the connectToLiveAPI function.
+    const sessionPromiseRef = useRef<ReturnType<typeof connectToLiveAPI> | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const inputAudioContextRef = useRef<AudioContext | null>(null);

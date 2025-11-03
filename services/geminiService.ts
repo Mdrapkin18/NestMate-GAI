@@ -1,5 +1,6 @@
 
-import { GoogleGenAI, LiveSession, LiveServerMessage, Modality, Blob } from "@google/genai";
+
+import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
 import { encode } from '../utils/helpers';
 
 const API_KEY = process.env.API_KEY;
@@ -58,7 +59,9 @@ export const connectToLiveAPI = (callbacks: {
     onmessage: (message: LiveServerMessage) => Promise<void>;
     onerror: (e: ErrorEvent) => void;
     onclose: (e: CloseEvent) => void;
-}): Promise<LiveSession> => {
+// FIX: The LiveSession type is not exported from the @google/genai library.
+// Use ReturnType<typeof ai.live.connect> to infer the return type of the connect method.
+}): ReturnType<typeof ai.live.connect> => {
     return ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks,

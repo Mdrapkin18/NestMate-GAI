@@ -15,6 +15,7 @@ const dateSchema = z.preprocess((arg) => {
 const entrySchema = z.object({
   id: z.string(), // Firestore document ID
   babyId: z.string(),
+  familyId: z.string(),
   createdBy: z.string(),
   createdAt: dateSchema,
   updatedAt: dateSchema,
