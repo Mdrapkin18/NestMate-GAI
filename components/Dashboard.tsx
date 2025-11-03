@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AnyEntry, Baby } from '../types';
 import { FeedingIcon } from './icons/FeedingIcon';
@@ -24,14 +23,17 @@ const StatCard: React.FC<React.PropsWithChildren<{ title: string; icon: React.Re
 );
 
 export const Dashboard: React.FC<DashboardProps> = ({ baby, entries, onStartTimer }) => {
-    const lastFeed = entries.filter(e => e.type === 'feed').sort((a, b) => b.startedAt - a.startedAt)[0];
-    const lastSleep = entries.filter(e => e.type === 'sleep').sort((a, b) => b.startedAt - a.startedAt)[0];
+    // FIX: Check for 'kind' property to identify Feed entries and use getTime() for date comparison.
+    const lastFeed = entries.filter(e => 'kind' in e).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
+    // FIX: Check for 'category' property to identify Sleep entries and use getTime() for date comparison.
+    const lastSleep = entries.filter(e => 'category' in e).sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
 
     return (
         <div className="p-4 space-y-6">
             <header>
                 <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">{baby.name}</h1>
-                <p className="text-light-text-secondary dark:text-dark-text-secondary">{getAge(baby.dob)}</p>
+                {/* FIX: Convert Date object to string for getAge function. */}
+                <p className="text-light-text-secondary dark:text-dark-text-secondary">{getAge(baby.dob.toISOString())}</p>
             </header>
 
             <div className="space-y-4">

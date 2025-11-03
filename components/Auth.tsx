@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { GoogleIcon } from './icons/GoogleIcon';
+import { useAuth } from '../hooks/useAuth';
 
-interface AuthProps {
-    onLoginSuccess: () => void;
-}
 
 const AuthInput: React.FC<{id: string, type: string, placeholder: string}> = ({id, type, placeholder}) => (
     <div>
@@ -19,19 +17,18 @@ const AuthInput: React.FC<{id: string, type: string, placeholder: string}> = ({i
     </div>
 );
 
-export const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
+export const Auth: React.FC = () => {
     const [isLoginView, setIsLoginView] = useState(true);
+    const { signInWithGoogle } = useAuth();
 
-    // This is a mock login. In a real app, this would trigger Firebase Auth.
-    const handleGoogleSignIn = () => {
-        onLoginSuccess();
+    const handleGoogleSignIn = async () => {
+        await signInWithGoogle();
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // In a real app, you would handle email/password auth here.
-        // For now, we'll just log in successfully for the demo.
-        onLoginSuccess();
+        alert('Email/Password sign in is not implemented in this demo.');
     };
 
 

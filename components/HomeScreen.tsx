@@ -1,5 +1,5 @@
 import React from 'react';
-import { AnyEntry, Baby, TimerState } from '../types';
+import { AnyEntry, Baby, TimerState, Feed } from '../types';
 import { FeedingIcon } from './icons/FeedingIcon';
 import { SleepIcon } from './icons/SleepIcon';
 import { ActivityIcon } from './icons/DiaperIcon';
@@ -35,13 +35,17 @@ const QuickAddButton: React.FC<{label: string; icon: React.ReactNode; onClick: (
 
 const ActiveTimerCard: React.FC<{timer: TimerState, onStop: () => void}> = ({ timer, onStop }) => {
     const { elapsed } = useTimer(timer.startedAt);
+    const timerType = timer.type === 'feed' ? 'Feeding' : 'Sleep';
     return (
         <div className="bg-light-surface dark:bg-dark-surface p-4 rounded-lg border border-primary flex items-center justify-between shadow-md">
             <div className="flex items-center space-x-3">
                 <div className="text-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                     {timer.type === 'feed' ? <FeedingIcon className="h-6 w-6" /> : <SleepIcon className="h-6 w-6" />}
                 </div>
-                <p className="text-2xl font-semibold tracking-wider text-light-text dark:text-dark-text">{formatDuration(elapsed)}</p>
+                <div>
+                  <p className="text-sm font-semibold">{timerType}</p>
+                  <p className="text-2xl font-semibold tracking-wider text-light-text dark:text-dark-text">{formatDuration(elapsed)}</p>
+                </div>
             </div>
             <button 
                 onClick={onStop}
@@ -84,7 +88,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
     const ageInMonths = getAgeInMonths(baby.dob.toISOString());
 
     const getFeedingRecText = () => {
-        const lastFeed = entries.find(e => 'kind' in e && e.endedAt);
+        const lastFeed = entries.find(e => 'kind' in e && e.endedAt) as Feed | undefined;
         if (!lastFeed || !lastFeed.endedAt) {
             return "Log a feeding to get suggestions.";
         }

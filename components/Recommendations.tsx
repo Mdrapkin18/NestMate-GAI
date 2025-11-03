@@ -22,10 +22,12 @@ const RecommendationCard: React.FC<React.PropsWithChildren<{ title: string; icon
 );
 
 export const Recommendations: React.FC<RecommendationsProps> = ({ baby, entries }) => {
-    const ageInMonths = getAgeInMonths(baby.dob);
+    // FIX: Convert Date object to string for getAgeInMonths function.
+    const ageInMonths = getAgeInMonths(baby.dob.toISOString());
 
     const getFeedingRec = () => {
-        const lastFeed = entries.find(e => e.type === 'feed');
+        // FIX: Check for 'kind' property to identify Feed entries.
+        const lastFeed = entries.find(e => 'kind' in e);
         if (!lastFeed || !lastFeed.endedAt) {
             return <p>Log a feeding to get recommendations.</p>;
         }
@@ -39,8 +41,9 @@ export const Recommendations: React.FC<RecommendationsProps> = ({ baby, entries 
             [minInterval, maxInterval, intervalText] = [4, 5, "4-5 hours"];
         }
 
-        const nextFeedMin = new Date(lastFeed.endedAt + minInterval * 60 * 60 * 1000);
-        const nextFeedMax = new Date(lastFeed.endedAt + maxInterval * 60 * 60 * 1000);
+        // FIX: Use getTime() to perform arithmetic on dates.
+        const nextFeedMin = new Date(lastFeed.endedAt.getTime() + minInterval * 60 * 60 * 1000);
+        const nextFeedMax = new Date(lastFeed.endedAt.getTime() + maxInterval * 60 * 60 * 1000);
 
         return (
             <>
@@ -53,7 +56,8 @@ export const Recommendations: React.FC<RecommendationsProps> = ({ baby, entries 
     };
     
     const getSleepRec = () => {
-        const lastSleep = entries.find(e => e.type === 'sleep');
+        // FIX: Check for 'category' property to identify Sleep entries.
+        const lastSleep = entries.find(e => 'category' in e);
         if (!lastSleep || !lastSleep.endedAt) {
             return <p>Log a sleep session to get recommendations.</p>;
         }
@@ -67,8 +71,9 @@ export const Recommendations: React.FC<RecommendationsProps> = ({ baby, entries 
             [minWake, maxWake, wakeWindowText] = [120, 180, "2-3 hours"];
         }
         
-        const nextNapMin = new Date(lastSleep.endedAt + minWake * 60 * 1000);
-        const nextNapMax = new Date(lastSleep.endedAt + maxWake * 60 * 1000);
+        // FIX: Use getTime() to perform arithmetic on dates.
+        const nextNapMin = new Date(lastSleep.endedAt.getTime() + minWake * 60 * 1000);
+        const nextNapMax = new Date(lastSleep.endedAt.getTime() + maxWake * 60 * 1000);
         
         return (
             <>

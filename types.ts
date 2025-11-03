@@ -1,12 +1,23 @@
 import { z } from 'zod';
+import { Timestamp } from 'firebase/firestore';
+
+// Zod custom preprocessor to handle Firestore Timestamps
+const dateSchema = z.preprocess((arg) => {
+  if (arg instanceof Timestamp) {
+    // FIX: Explicitly cast `arg` to `Timestamp` to work around a potential environment issue
+    // where the `instanceof` type guard is not correctly narrowing the type from `unknown`.
+    return (arg as Timestamp).toDate();
+  }
+  return arg;
+}, z.date());
 
 // Base schema for all entries
 const entrySchema = z.object({
-  id: z.string().uuid(),
-  babyId: z.string().uuid(),
+  id: z.string(), // Firestore document ID
+  babyId: z.string(),
   createdBy: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  createdAt: dateSchema,
+  updatedAt: dateSchema,
   deviceId: z.string().optional(),
   note: z.string().optional(),
 });
@@ -16,17 +27,17 @@ export const feedSchema = entrySchema.extend({
   kind: z.enum(['nursing', 'bottle', 'pump']),
   side: z.enum(['left', 'right']).optional(),
   amountOz: z.number().positive().optional(),
-  startedAt: z.date(),
-  endedAt: z.date().optional(),
-  latch: z.enum(['good', 'fair', 'poor']).optional(),
-  pain: z.number().min(0).max(10).optional(),
+  startedAt: dateSchema,
+  endedAt: dateSchema.optional(),
+  latch: z.boolean().optional(),
+  pain: z.boolean().optional(),
 });
 export type Feed = z.infer<typeof feedSchema>;
 
 // Sleep Schemas
 export const sleepSchema = entrySchema.extend({
-  startedAt: z.date(),
-  endedAt: z.date().optional(),
+  startedAt: dateSchema,
+  endedAt: dateSchema.optional(),
   category: z.enum(['nap', 'night']),
   quality: z.enum(['good', 'ok', 'fussy']).optional(),
 });
@@ -34,12 +45,11 @@ export type Sleep = z.infer<typeof sleepSchema>;
 
 // Profile Schemas
 export const babySchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   familyId: z.string(),
   name: z.string(),
-  dob: z.date(),
+  dob: dateSchema,
   photoUrl: z.string().url().optional(),
-  // Fix: Add optional weight and height to match profile fields
   weightKg: z.number().positive().optional(),
   heightCm: z.number().positive().optional(),
 });
@@ -50,7 +60,9 @@ export const userProfileSchema = z.object({
   email: z.string().email(),
   displayName: z.string().optional(),
   familyId: z.string().optional(),
-  role: z.enum(['owner', 'editor', 'viewer']).optional(),
+  role: z.enum(['owner', 'editor', 'viewer', 'admin', 'caregiver']).optional(),
+  babies: z.array(z.string()).optional(),
+  fcmTokens: z.array(z.string()).optional(),
 });
 export type UserProfile = z.infer<typeof userProfileSchema>;
 
@@ -60,7 +72,7 @@ export type ActiveTab = 'home' | 'feeding' | 'sleep' | 'history' | 'settings';
 export interface TimerState {
   id: string;
   type: 'feed' | 'sleep';
-  startedAt: number; // Storing as number for easier localStorage serialization
+  startedAt: number; // Storing as number for easier state management
   side?: 'left' | 'right';
 }
 

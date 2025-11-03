@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { HomeScreen } from './components/HomeScreen';
 import { Auth } from './components/Auth';
@@ -8,45 +8,103 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { StartFeedScreen } from './components/StartFeedScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { UndoBanner } from './components/UndoBanner';
-// Fix: Import 'Feed' instead of 'FeedEntry' and consolidate imports
-import { AnyEntry, TimerState, Baby, BreastSide, ActiveTab, BottleType, Feed } from './types';
+import { AnyEntry, TimerState, Baby, Feed, ActiveTab, BreastSide, BottleType } from './types';
+import { useAuth } from './hooks/useAuth';
+import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { db } from './services/firebase';
+import { feedSchema, sleepSchema } from './types';
 
-// This is a mock of what would come from Firebase
-const initialEntries: AnyEntry[] = [
-    // Reworking mocks to be compatible with new Zod types (using Date objects)
-    // Note: This data will eventually be fetched from Firestore
-].sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime());
+// Helper to convert our app objects to what Firestore expects (e.g., handling dates)
+const toFirestore = (data: any) => {
+    const firestoreData: { [key: string]: any } = {};
+    for (const key in data) {
+        // Exclude id, which is the doc name, not a field
+        if (key === 'id') continue;
+        if (data[key] instanceof Date) {
+            firestoreData[key] = data[key]; // Firestore SDK handles Date objects
+        } else if (data[key] !== undefined) {
+            firestoreData[key] = data[key];
+        }
+    }
+    return firestoreData;
+};
 
 
 const App: React.FC = () => {
     const [isDarkMode, setIsDarkMode] = useState(false);
-    const [appState, setAppState] = useState<'splash' | 'auth' | 'main'>('splash');
+    const { user, loading: authLoading } = useAuth();
+    
+    // This will be replaced by a proper baby selection UI
     const [baby, setBaby] = useState<Baby>({
-        id: uuidv4(),
-        familyId: uuidv4(),
+        id: 'mock-baby-id-1',
+        familyId: 'mock-family-id-1',
         name: 'Keegan',
         dob: new Date('2024-05-15'),
     });
-    const [entries, setEntries] = useState<AnyEntry[]>(initialEntries);
-    const [activeTimer, setActiveTimer] = useState<TimerState | null>(null);
+
+    const [entries, setEntries] = useState<AnyEntry[]>([]);
+    const [entriesLoading, setEntriesLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<ActiveTab>('home');
     const [isLoggingFeed, setIsLoggingFeed] = useState(false);
     const [lastAddedEntryId, setLastAddedEntryId] = useState<string | null>(null);
     const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const triggerUndo = (entryId: string) => {
-        if (undoTimeoutRef.current) {
-            clearTimeout(undoTimeoutRef.current);
+    // Derived state for active timer
+    const activeTimer = useMemo<TimerState | null>(() => {
+        const activeEntry = entries.find(e => !e.endedAt);
+        if (activeEntry) {
+            return {
+                id: activeEntry.id,
+                type: 'kind' in activeEntry ? 'feed' : 'sleep',
+                startedAt: activeEntry.startedAt.getTime(),
+                side: 'kind' in activeEntry && activeEntry.kind === 'nursing' ? activeEntry.side : undefined,
+            };
         }
+        return null;
+    }, [entries]);
+
+    useEffect(() => {
+        if (!user || !baby?.id) {
+            setEntries([]);
+            setEntriesLoading(false);
+            return;
+        }
+        setEntriesLoading(true);
+        const entriesRef = collection(db, "entries");
+        const q = query(entriesRef, where("babyId", "==", baby.id), orderBy("startedAt", "desc"));
+
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const fetchedEntries: AnyEntry[] = [];
+            querySnapshot.forEach((doc) => {
+                const data = { id: doc.id, ...doc.data() };
+                if (data.kind) { // Feed entry
+                    const parsed = feedSchema.safeParse(data);
+                    if (parsed.success) fetchedEntries.push(parsed.data);
+                } else { // Sleep entry
+                    const parsed = sleepSchema.safeParse(data);
+                    if (parsed.success) fetchedEntries.push(parsed.data);
+                }
+            });
+            setEntries(fetchedEntries);
+            setEntriesLoading(false);
+        }, (error) => {
+            console.error("Error fetching entries:", error);
+            setEntriesLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [user, baby?.id]);
+
+
+    const triggerUndo = (entryId: string) => {
+        if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
         setLastAddedEntryId(entryId);
-        undoTimeoutRef.current = setTimeout(() => {
-            setLastAddedEntryId(null);
-        }, 10000); // 10 seconds
+        undoTimeoutRef.current = setTimeout(() => setLastAddedEntryId(null), 10000);
     };
 
-    const handleUndo = useCallback(() => {
+    const handleUndo = useCallback(async () => {
         if (!lastAddedEntryId) return;
-        setEntries(prev => prev.filter(entry => entry.id !== lastAddedEntryId));
+        await deleteDoc(doc(db, "entries", lastAddedEntryId));
         setLastAddedEntryId(null);
         if (undoTimeoutRef.current) {
             clearTimeout(undoTimeoutRef.current);
@@ -56,106 +114,74 @@ const App: React.FC = () => {
 
 
     useEffect(() => {
-        const timer = setTimeout(() => setAppState('auth'), 2000);
-        return () => clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
         const savedTheme = localStorage.getItem('theme');
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const useDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
-        setIsDarkMode(useDark);
-
-        const savedTimer = localStorage.getItem('activeTimer');
-        if (savedTimer) {
-            setActiveTimer(JSON.parse(savedTimer));
-        }
+        setIsDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
     }, []);
 
     useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
+        document.documentElement.classList.toggle('dark', isDarkMode);
+        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
     }, [isDarkMode]);
 
-    const handleStartTimer = useCallback((type: 'feed' | 'sleep', side?: BreastSide) => {
-        if (activeTimer) {
-            alert('Another timer is already active.');
-            return;
-        }
-        const newTimer: TimerState = {
-            id: uuidv4(),
-            type,
-            startedAt: Date.now(),
-            ...(type === 'feed' && { side: side || 'left' })
+    const handleStartTimer = useCallback(async (type: 'feed' | 'sleep', side?: BreastSide) => {
+        if (activeTimer || !user) return;
+
+        const now = new Date();
+        const newEntryData = type === 'feed' ? {
+            kind: 'nursing',
+            side,
+        } : {
+            category: 'nap', // Default
         };
-        setActiveTimer(newTimer);
-        localStorage.setItem('activeTimer', JSON.stringify(newTimer));
+
+        const docPayload = {
+            ...newEntryData,
+            babyId: baby.id,
+            startedAt: now,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
+        triggerUndo(docRef.id);
         setIsLoggingFeed(false);
         setActiveTab('home');
-    }, [activeTimer]);
+    }, [activeTimer, user, baby?.id]);
     
-    const handleStopTimer = useCallback(() => {
+    const handleStopTimer = useCallback(async () => {
         if (!activeTimer) return;
+        const entryRef = doc(db, "entries", activeTimer.id);
+        await updateDoc(entryRef, {
+            endedAt: new Date(),
+            updatedAt: serverTimestamp(),
+        });
+    }, [activeTimer]);
 
-        const now = new Date();
-        const startedAt = new Date(activeTimer.startedAt);
-        
-        const newEntry: AnyEntry = activeTimer.type === 'feed'
-            ? {
-                id: activeTimer.id,
-                babyId: baby.id,
-                kind: 'nursing',
-                side: activeTimer.side,
-                startedAt,
-                endedAt: now,
-                createdBy: 'user-id-placeholder',
-                createdAt: now,
-                updatedAt: now,
-            }
-            : {
-                id: activeTimer.id,
-                babyId: baby.id,
-                category: 'nap', // Defaulting
-                startedAt,
-                endedAt: now,
-                createdBy: 'user-id-placeholder',
-                createdAt: now,
-                updatedAt: now,
-            };
-
-        setEntries(prev => [newEntry, ...prev].sort((a,b) => b.startedAt.getTime() - a.startedAt.getTime()));
-        triggerUndo(newEntry.id);
-        setActiveTimer(null);
-        localStorage.removeItem('activeTimer');
-    }, [activeTimer, baby.id]);
-
-    const handleLogBottle = useCallback((amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
-        // Zod schema expects amountOz. In a real app, you'd handle unit conversion properly.
+    const handleLogBottle = useCallback(async (amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
+        if (!user) return;
         const amountOz = unit === 'ml' ? amount / 29.5735 : amount;
         const now = new Date();
-
-        // Fix: Use the imported 'Feed' type
-        const newEntry: Feed = {
-            id: uuidv4(),
+        const newEntry: Omit<Feed, 'id' | 'createdAt' | 'updatedAt' | 'startedAt' | 'endedAt'> = {
             babyId: baby.id,
             kind: 'bottle',
             amountOz,
-            startedAt: now,
-            endedAt: now, // For bottle logs, start and end are the same
-            createdBy: 'user-id-placeholder',
-            createdAt: now,
-            updatedAt: now,
+            createdBy: user.uid,
         };
-        setEntries(prev => [newEntry, ...prev].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime()));
-        triggerUndo(newEntry.id);
+        
+        const docPayload = {
+            ...newEntry,
+            startedAt: now,
+            endedAt: now,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+        const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
+        triggerUndo(docRef.id);
         setIsLoggingFeed(false);
         setActiveTab('home');
-    }, [baby.id]);
+    }, [baby?.id, user]);
     
     const renderContent = () => {
         if (isLoggingFeed) {
@@ -189,26 +215,30 @@ const App: React.FC = () => {
                 return <SettingsScreen 
                     baby={baby} 
                     onUpdateBaby={setBaby} 
-                    onLogout={() => setAppState('auth')}
                 />;
             default:
                 return null;
         }
     }
     
-    if (appState === 'splash') {
+    if (authLoading) {
         return <WelcomeScreen />;
     }
 
-    if (appState === 'auth') {
-        return <Auth onLoginSuccess={() => setAppState('main')} />;
+    if (!user) {
+        return <Auth />;
+    }
+
+    if (!baby) {
+        // In a real app, this would be a "Create your first baby profile" screen
+        return <div className="p-8 text-center">Please set up a baby profile in settings.</div>
     }
 
     return (
         <div className="min-h-screen bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text transition-colors duration-300">
             <div className="max-w-md mx-auto relative">
                 <main className="pb-24">
-                    {renderContent()}
+                    {entriesLoading ? <div className="p-8 text-center">Loading entries...</div> : renderContent()}
                 </main>
                 {lastAddedEntryId && <UndoBanner onUndo={handleUndo} />}
                 {!isLoggingFeed && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
