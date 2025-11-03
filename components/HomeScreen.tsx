@@ -6,6 +6,7 @@ import { DiaperIcon } from './icons/DiaperIcon';
 import { BathIcon } from './icons/BathIcon';
 import { getAge, formatDuration, getAgeInMonths } from '../utils/helpers';
 import { useTimer } from '../hooks/useTimer';
+import { PumpIcon } from './icons/PumpIcon';
 
 interface HomeScreenProps {
   baby: Baby;
@@ -16,6 +17,7 @@ interface HomeScreenProps {
   onStartSleepClick: () => void;
   onStartDiaperClick: () => void;
   onStartBathClick: () => void;
+  onStartPumpClick: () => void;
 }
 
 const StatCard: React.FC<React.PropsWithChildren<{ title: string; value: string; }>> = ({ title, value, children }) => (
@@ -31,19 +33,25 @@ const QuickAddButton: React.FC<{label: string; icon: React.ReactNode; onClick: (
         <div className="w-16 h-16 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center text-primary dark:text-primary-200">
             {icon}
         </div>
-        <span className="font-medium">{label}</span>
+        <span className="font-medium text-sm">{label}</span>
     </button>
 );
 
 
 const ActiveTimerCard: React.FC<{timer: TimerState, onStop: () => void}> = ({ timer, onStop }) => {
     const { elapsed } = useTimer(timer.startedAt);
-    const timerType = timer.type === 'feed' ? 'Feeding' : 'Sleep';
+    let timerType = 'Activity';
+    if(timer.type === 'feed') timerType = 'Feeding';
+    if(timer.type === 'sleep') timerType = 'Sleep';
+    if(timer.type === 'pump') timerType = 'Pumping';
+    
     return (
         <div className="bg-light-surface dark:bg-dark-surface p-4 rounded-lg border border-primary flex items-center justify-between shadow-md">
             <div className="flex items-center space-x-3">
                 <div className="text-primary">
-                     {timer.type === 'feed' ? <FeedingIcon className="h-6 w-6" /> : <SleepIcon className="h-6 w-6" />}
+                     {timer.type === 'feed' && <FeedingIcon className="h-6 w-6" />}
+                     {timer.type === 'sleep' && <SleepIcon className="h-6 w-6" />}
+                     {timer.type === 'pump' && <PumpIcon className="h-6 w-6" />}
                 </div>
                 <div>
                   <p className="text-sm font-semibold">{timerType}</p>
@@ -82,16 +90,15 @@ const BabyCard: React.FC<{baby: Baby, activeTimer: TimerState | null}> = ({ baby
 }
 
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTimer, onStopTimer, onStartFeedClick, onStartSleepClick, onStartDiaperClick, onStartBathClick }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTimer, onStopTimer, onStartFeedClick, onStartSleepClick, onStartDiaperClick, onStartBathClick, onStartPumpClick }) => {
     const totalFeedsToday = entries.filter(e => 'kind' in e && e.startedAt.toDateString() === new Date().toDateString()).length;
-    // This is a simplified duration calculation. A real app would sum up durations.
     const totalFeedTimeToday = "8 hr 45 min"; 
     const nextFeedIn = "1 hr 20 min";
 
     const ageInMonths = getAgeInMonths(baby.dob.toISOString());
 
     const getFeedingRecText = () => {
-        const lastFeed = entries.find(e => 'kind' in e && e.endedAt) as Feed | undefined;
+        const lastFeed = entries.find(e => ('kind' in e && e.kind !== 'pump') && e.endedAt) as Feed | undefined;
         if (!lastFeed || !lastFeed.endedAt) {
             return "Log a feeding to get suggestions.";
         }
@@ -168,8 +175,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ baby, entries, activeTim
 
             <div>
                 <h3 className="text-lg font-semibold mb-4 text-light-text dark:text-dark-text">Quick Add</h3>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                    <QuickAddButton label="Feeding" icon={<FeedingIcon className="w-8 h-8"/>} onClick={onStartFeedClick} />
+                <div className="grid grid-cols-5 gap-1 text-center">
+                    <QuickAddButton label="Feed" icon={<FeedingIcon className="w-8 h-8"/>} onClick={onStartFeedClick} />
+                    <QuickAddButton label="Pump" icon={<PumpIcon className="w-8 h-8"/>} onClick={onStartPumpClick} />
                     <QuickAddButton label="Sleep" icon={<SleepIcon className="w-8 h-8"/>} onClick={onStartSleepClick} />
                     <QuickAddButton label="Diaper" icon={<DiaperIcon className="w-8 h-8"/>} onClick={onStartDiaperClick} />
                     <QuickAddButton label="Bath" icon={<BathIcon className="w-8 h-8"/>} onClick={onStartBathClick} />

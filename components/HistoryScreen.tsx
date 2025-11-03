@@ -5,9 +5,10 @@ import { HistoryItem } from './HistoryItem';
 
 interface HistoryScreenProps {
   entries: AnyEntry[];
+  onSelectEntry: (entry: AnyEntry) => void;
 }
 
-export const HistoryScreen: React.FC<HistoryScreenProps> = ({ entries }) => {
+export const HistoryScreen: React.FC<HistoryScreenProps> = ({ entries, onSelectEntry }) => {
     const groupedEntries = entries.reduce((acc, entry) => {
         const dateKey = entry.startedAt.toDateString();
         if (!acc[dateKey]) {
@@ -35,9 +36,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ entries }) => {
                         </h2>
                         <div className="bg-light-surface dark:bg-dark-surface rounded-xl shadow-sm divide-y divide-gray-200 dark:divide-gray-700">
                             {groupedEntries[dateKey].map(entry => (
-                                <div className="px-4" key={entry.id}>
-                                    <HistoryItem entry={entry} />
-                                </div>
+                                <HistoryItem 
+                                    key={entry.id}
+                                    entry={entry}
+                                    onClick={() => onSelectEntry(entry)}
+                                />
                             ))}
                         </div>
                     </div>

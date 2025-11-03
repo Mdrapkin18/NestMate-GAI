@@ -2,8 +2,10 @@
 
 
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LiveServerMessage } from '@google/genai';
+import { v4 as uuidv4 } from 'uuid';
 import { ChatMessage } from '../types';
 import { generateTextWithGoogleSearch, connectToLiveAPI, createPcmBlob } from '../services/geminiService';
 import { decode, decodeAudioData } from '../utils/helpers';
@@ -49,7 +51,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
     const handleSend = async () => {
         if (!input.trim()) return;
 
-        const userMessage: ChatMessage = { role: 'user', text: input };
+        // FIX: Add missing 'id' property to ChatMessage.
+        const userMessage: ChatMessage = { id: uuidv4(), role: 'user', text: input };
         console.log('[AIAssistant] Sending text message:', userMessage);
         setMessages(prev => [...prev, userMessage]);
         setInput('');
@@ -57,7 +60,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
 
         const response = await generateTextWithGoogleSearch(input, babyContext);
         
-        const modelMessage: ChatMessage = { role: 'model', text: response.text, sources: response.sources };
+        // FIX: Add missing 'id' property to ChatMessage.
+        const modelMessage: ChatMessage = { id: uuidv4(), role: 'model', text: response.text, sources: response.sources };
         console.log('[AIAssistant] Received model response:', modelMessage);
         setMessages(prev => [...prev, modelMessage]);
         setIsLoading(false);
@@ -92,14 +96,16 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
 
         console.log('[AIAssistant] Starting live session toggle.');
         setLiveState(LiveState.CONNECTING);
-        setMessages(prev => [...prev, {role: 'model', text: 'Connecting to live assistant...'}]);
+        // FIX: Add missing 'id' property to ChatMessage.
+        setMessages(prev => [...prev, {id: uuidv4(), role: 'model', text: 'Connecting to live assistant...'}]);
 
         try {
             await navigator.mediaDevices.getUserMedia({ audio: true });
             console.log('[AIAssistant] Microphone permission granted.');
         } catch(err) {
             console.error("[AIAssistant] Microphone permission denied", err);
-            setMessages(prev => [...prev, {role: 'model', text: 'Microphone access is required for voice chat.'}]);
+            // FIX: Add missing 'id' property to ChatMessage.
+            setMessages(prev => [...prev, {id: uuidv4(), role: 'model', text: 'Microphone access is required for voice chat.'}]);
             setLiveState(LiveState.ERROR);
             return;
         }
@@ -111,7 +117,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
             onopen: async () => {
                 console.log('[AIAssistant] Live session opened.');
                 setLiveState(LiveState.LISTENING);
-                setMessages(prev => [...prev, {role: 'model', text: 'I\'m listening...'}]);
+                // FIX: Add missing 'id' property to ChatMessage.
+                setMessages(prev => [...prev, {id: uuidv4(), role: 'model', text: 'I\'m listening...'}]);
                 streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
                 inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
                 const source = inputAudioContextRef.current.createMediaStreamSource(streamRef.current);
@@ -158,7 +165,8 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ onClose, babyContext }
             },
             onerror: (e: ErrorEvent) => {
                 console.error('[AIAssistant] Live API Error:', e);
-                setMessages(prev => [...prev, {role: 'model', text: 'An error occurred with the voice assistant.'}]);
+                // FIX: Add missing 'id' property to ChatMessage.
+                setMessages(prev => [...prev, {id: uuidv4(), role: 'model', text: 'An error occurred with the voice assistant.'}]);
                 setLiveState(LiveState.ERROR);
                 stopLiveSession();
             },

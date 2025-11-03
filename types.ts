@@ -25,7 +25,7 @@ const entrySchema = z.object({
 
 // Feeding Schemas
 export const feedSchema = entrySchema.extend({
-  kind: z.enum(['nursing', 'bottle', 'pump']),
+  kind: z.enum(['nursing', 'bottle']),
   side: z.enum(['left', 'right']).optional(),
   amountOz: z.number().positive().optional(),
   startedAt: dateSchema,
@@ -34,6 +34,18 @@ export const feedSchema = entrySchema.extend({
   pain: z.boolean().optional(),
 });
 export type Feed = z.infer<typeof feedSchema>;
+
+// Pump Schemas
+export const pumpSchema = entrySchema.extend({
+    kind: z.literal('pump'),
+    leftAmountOz: z.number().nonnegative().optional(),
+    rightAmountOz: z.number().nonnegative().optional(),
+    totalAmountOz: z.number().nonnegative().optional(),
+    startedAt: dateSchema,
+    endedAt: dateSchema.optional(),
+});
+export type Pump = z.infer<typeof pumpSchema>;
+
 
 // Sleep Schemas
 export const sleepSchema = entrySchema.extend({
@@ -103,14 +115,15 @@ export type ActiveTab = 'home' | 'feeding' | 'sleep' | 'history' | 'settings';
 
 export interface TimerState {
   id: string;
-  type: 'feed' | 'sleep';
+  type: 'feed' | 'sleep' | 'pump';
   startedAt: number; // Storing as number for easier state management
   side?: 'left' | 'right';
 }
 
-export type AnyEntry = Feed | Sleep | Diaper | Bath;
+export type AnyEntry = Feed | Sleep | Diaper | Bath | Pump;
 
 export interface ChatMessage {
+  id: string;
   role: 'user' | 'model';
   text: string;
   sources?: { uri: string; title: string }[];

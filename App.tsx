@@ -8,11 +8,11 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { StartFeedScreen } from './components/StartFeedScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { UndoBanner } from './components/UndoBanner';
-import { AnyEntry, TimerState, Baby, Feed, ActiveTab, BreastSide, BottleType, Diaper, Bath } from './types';
+import { AnyEntry, TimerState, Baby, Feed, ActiveTab, BreastSide, BottleType, Diaper, Bath, Pump } from './types';
 import { useAuth } from './hooks/useAuth';
-import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, getDoc, setDoc, arrayUnion, writeBatch } from 'firebase/firestore';
 import { db } from './services/firebase';
-import { feedSchema, sleepSchema, babySchema, diaperSchema, bathSchema } from './types';
+import { feedSchema, sleepSchema, babySchema, diaperSchema, bathSchema, pumpSchema } from './types';
 import { AIAssistant } from './components/AIAssistant';
 import { generateBabyContext } from './utils/contextHelper';
 import { AIIcon } from './components/icons/AIIcon';
@@ -21,6 +21,8 @@ import { JoinOrCreateFamilyScreen } from './components/JoinOrCreateFamilyScreen'
 import { createFamily, acceptInvite } from './services/familyService';
 import { LogDiaperScreen } from './components/LogDiaperScreen';
 import { LogBathScreen } from './components/LogBathScreen';
+import { LogPumpScreen } from './components/LogPumpScreen';
+import { EditEntryScreen } from './components/EditEntryScreen';
 
 // Helper to convert our app objects to what Firestore expects (e.g., handling dates)
 const toFirestore = (data: any) => {
@@ -37,9 +39,10 @@ const toFirestore = (data: any) => {
     return firestoreData;
 };
 
+type ModalView = 'none' | 'logFeed' | 'logDiaper' | 'logBath' | 'logPump' | 'editEntry';
+
 
 const App: React.FC = () => {
-    const [isDarkMode, setIsDarkMode] = useState(false);
     const { user, userProfile, loading: authLoading } = useAuth();
     
     const [activeBaby, setActiveBaby] = useState<Baby | null>(null);
@@ -48,11 +51,13 @@ const App: React.FC = () => {
     const [entries, setEntries] = useState<AnyEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<ActiveTab>('home');
-    const [isLoggingFeed, setIsLoggingFeed] = useState(false);
-    const [isLoggingDiaper, setIsLoggingDiaper] = useState(false);
-    const [isLoggingBath, setIsLoggingBath] = useState(false);
-    const [lastAddedEntryId, setLastAddedEntryId] = useState<string | null>(null);
+    
+    const [modalView, setModalView] = useState<ModalView>('none');
+    const [selectedEntry, setSelectedEntry] = useState<AnyEntry | null>(null);
+
+    const [lastDeletedEntry, setLastDeletedEntry] = useState<AnyEntry | null>(null);
     const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
     const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
 
     useEffect(() => {
@@ -62,7 +67,7 @@ const App: React.FC = () => {
     const babyContext = useMemo(() => {
         if (!activeBaby) return '';
         const context = generateBabyContext(activeBaby, entries);
-        console.log('[App] Baby context updated:', context);
+        console.log('[App] Baby context updated.');
         return context;
     }, [activeBaby, entries]);
 
@@ -73,7 +78,7 @@ const App: React.FC = () => {
         if (activeEntry && ('kind' in activeEntry || 'category' in activeEntry)) {
              const timer: TimerState = {
                 id: activeEntry.id,
-                type: 'kind' in activeEntry ? 'feed' : 'sleep',
+                type: 'kind' in activeEntry ? (activeEntry.kind === 'pump' ? 'pump' : 'feed') : 'sleep',
                 startedAt: activeEntry.startedAt.getTime(),
                 side: 'kind' in activeEntry && activeEntry.kind === 'nursing' ? activeEntry.side : undefined,
             };
@@ -103,7 +108,6 @@ const App: React.FC = () => {
                 return;
             }
 
-            // For now, just load the first baby. A future update could support multiple.
             const babyId = userProfile.babies[0]; 
             console.log(`[App] Attempting to fetch profile for babyId: ${babyId}`);
             const babyDocRef = doc(db, 'babies', babyId);
@@ -154,15 +158,18 @@ const App: React.FC = () => {
         const userDocRef = doc(db, 'users', user.uid);
 
         try {
+            const batch = writeBatch(db);
             const { id, ...dataToSave } = newBaby;
-            await setDoc(babyDocRef, dataToSave);
-            console.log(`[App] Saved new baby document with id: ${babyId}`);
+            batch.set(babyDocRef, dataToSave);
+            console.log(`[App] Staged new baby document with id: ${babyId}`);
             
-            await updateDoc(userDocRef, {
+            batch.update(userDocRef, {
                 babies: arrayUnion(babyId)
             });
-            console.log(`[App] Updated user profile with new babyId.`);
-            
+            console.log(`[App] Staged update to user profile with new babyId.`);
+
+            await batch.commit();
+            console.log('[App] Batch commit successful for new baby.');
             setActiveBaby(newBaby);
 
         } catch (error) {
@@ -182,9 +189,6 @@ const App: React.FC = () => {
         console.log(`[App] Subscribing to entries for baby: ${activeBaby.id}`);
         setEntriesLoading(true);
         const entriesRef = collection(db, "entries");
-        // FIX: Secured the query by filtering on the user's familyId. This aligns
-        // with Firestore security rules and resolves the 'permission-denied' error.
-        // A composite index on (familyId, babyId, startedAt desc) is likely required.
         const q = query(
             entriesRef, 
             where("familyId", "==", userProfile.familyId),
@@ -197,18 +201,23 @@ const App: React.FC = () => {
             querySnapshot.forEach((doc) => {
                 const data = { id: doc.id, ...doc.data() };
                 
-                if (data.kind) { // Feed entry
-                    const parsed = feedSchema.safeParse(data);
-                    if (parsed.success) fetchedEntries.push(parsed.data);
+                let parsed: any;
+                if (data.kind === 'pump') {
+                    parsed = pumpSchema.safeParse(data);
+                } else if (data.kind) { // Feed entry
+                    parsed = feedSchema.safeParse(data);
                 } else if (data.category) { // Sleep entry
-                    const parsed = sleepSchema.safeParse(data);
-                    if (parsed.success) fetchedEntries.push(parsed.data);
+                    parsed = sleepSchema.safeParse(data);
                 } else if (data.type) { // Diaper entry
-                    const parsed = diaperSchema.safeParse(data);
-                    if (parsed.success) fetchedEntries.push(parsed.data);
+                    parsed = diaperSchema.safeParse(data);
                 } else if (data.bathType) { // Bath entry
-                    const parsed = bathSchema.safeParse(data);
-                    if (parsed.success) fetchedEntries.push(parsed.data);
+                    parsed = bathSchema.safeParse(data);
+                }
+
+                if (parsed && parsed.success) {
+                    fetchedEntries.push(parsed.data);
+                } else if (parsed) {
+                    console.warn(`[App] Failed to parse an entry from Firestore:`, parsed.error);
                 }
             });
             console.log(`[App] Fetched ${fetchedEntries.length} entries from Firestore.`);
@@ -226,19 +235,22 @@ const App: React.FC = () => {
     }, [user, userProfile, activeBaby?.id]);
 
 
-    const triggerUndo = (entryId: string) => {
+    const triggerUndo = (deletedEntry: AnyEntry) => {
         if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-        setLastAddedEntryId(entryId);
-        console.log(`[App] Undo triggered for entryId: ${entryId}. Banner will show for 10s.`);
-        undoTimeoutRef.current = setTimeout(() => setLastAddedEntryId(null), 10000);
+        setLastDeletedEntry(deletedEntry);
+        console.log(`[App] Undo triggered for entryId: ${deletedEntry.id}. Banner will show for 10s.`);
+        undoTimeoutRef.current = setTimeout(() => setLastDeletedEntry(null), 10000);
     };
 
     const handleUndo = useCallback(async () => {
-        if (!lastAddedEntryId) return;
+        if (!lastDeletedEntry) return;
+        const entryToRestore = { ...lastDeletedEntry };
+        const entryId = entryToRestore.id;
+        console.log(`[App] Executing undo for entryId: ${entryId}`);
         try {
-            console.log(`[App] Executing undo for entryId: ${lastAddedEntryId}`);
-            await deleteDoc(doc(db, "entries", lastAddedEntryId));
-            setLastAddedEntryId(null);
+            const { id, ...dataToSave } = entryToRestore;
+            await setDoc(doc(db, "entries", entryId), toFirestore(dataToSave));
+            setLastDeletedEntry(null);
             if (undoTimeoutRef.current) {
                 clearTimeout(undoTimeoutRef.current);
                 undoTimeoutRef.current = null;
@@ -246,32 +258,20 @@ const App: React.FC = () => {
         } catch (error) {
             console.error("[App] Error undoing entry:", error);
         }
-    }, [lastAddedEntryId]);
+    }, [lastDeletedEntry]);
 
-
-    useEffect(() => {
-        const savedTheme = localStorage.getItem('theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setIsDarkMode(savedTheme === 'dark' || (!savedTheme && prefersDark));
-    }, []);
-
-
-
-    useEffect(() => {
-        document.documentElement.classList.toggle('dark', isDarkMode);
-        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-    }, [isDarkMode]);
-
-    const handleStartTimer = useCallback(async (type: 'feed' | 'sleep', side?: BreastSide) => {
+    const handleStartTimer = useCallback(async (type: 'feed' | 'sleep' | 'pump', side?: BreastSide) => {
         if (activeTimer || !user || !userProfile?.familyId || !activeBaby) return;
 
         const now = new Date();
-        const newEntryData = type === 'feed' ? {
-            kind: 'nursing',
-            side,
-        } : {
-            category: 'nap', // Default
-        };
+        let newEntryData;
+        if (type === 'feed') {
+            newEntryData = { kind: 'nursing', side };
+        } else if (type === 'sleep') {
+            newEntryData = { category: 'nap' }; // Default
+        } else { // pump
+            newEntryData = { kind: 'pump' };
+        }
         
         console.log(`[App] Starting ${type} timer`, { side });
 
@@ -286,10 +286,9 @@ const App: React.FC = () => {
         };
 
         try {
-            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-            console.log(`[App] Started timer with entryId: ${docRef.id}`);
-            triggerUndo(docRef.id);
-            setIsLoggingFeed(false);
+            await addDoc(collection(db, "entries"), toFirestore(docPayload));
+            console.log(`[App] Started timer entry successfully.`);
+            setModalView('none');
             setActiveTab('home');
         } catch (error) {
             console.error(`[App] Error starting ${type} timer:`, error);
@@ -309,97 +308,97 @@ const App: React.FC = () => {
             console.error("[App] Error stopping timer:", error);
         }
     }, [activeTimer]);
-
-    const handleLogBottle = useCallback(async (amount: number, unit: 'oz' | 'ml', bottleType: BottleType) => {
+    
+    const addEntry = useCallback(async (entryData: Omit<AnyEntry, 'id' | 'babyId' | 'familyId' | 'createdBy' | 'createdAt' | 'updatedAt'>) => {
         if (!user || !userProfile?.familyId || !activeBaby) return;
-        const amountOz = unit === 'ml' ? amount / 29.5735 : amount;
-        const now = new Date();
-        const newEntry: Omit<Feed, 'id' | 'createdAt' | 'updatedAt' | 'startedAt' | 'endedAt'> = {
-            babyId: activeBaby.id,
-            familyId: userProfile.familyId,
-            kind: 'bottle',
-            amountOz,
-            createdBy: user.uid,
-        };
-        
-        console.log('[App] Logging bottle feed:', newEntry);
 
         const docPayload = {
-            ...newEntry,
-            startedAt: now,
-            endedAt: now,
+            ...entryData,
+            babyId: activeBaby.id,
+            familyId: userProfile.familyId,
+            createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
+        console.log('[App] Adding new entry:', docPayload);
         try {
-            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-            console.log(`[App] Logged bottle feed with entryId: ${docRef.id}`);
-            triggerUndo(docRef.id);
-            setIsLoggingFeed(false);
+            await addDoc(collection(db, "entries"), toFirestore(docPayload));
+            console.log(`[App] Successfully added new entry.`);
+            setModalView('none');
             setActiveTab('home');
         } catch (error) {
-            console.error("[App] Error logging bottle feed:", error);
+            console.error("[App] Error adding entry:", error);
         }
     }, [activeBaby, user, userProfile?.familyId]);
     
-    const handleLogDiaper = useCallback(async (diaperData: Omit<Diaper, 'id' | 'babyId' | 'familyId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'startedAt' | 'endedAt'>) => {
-        if (!user || !userProfile?.familyId || !activeBaby) return;
-        const now = new Date();
-        const docPayload = {
-            ...diaperData,
-            babyId: activeBaby.id,
-            familyId: userProfile.familyId,
-            startedAt: now,
-            endedAt: now,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-        console.log('[App] Logging diaper change:', docPayload);
+    const handleUpdateEntry = useCallback(async (updatedEntry: AnyEntry) => {
+        console.log(`[App] Updating entry ${updatedEntry.id}:`, updatedEntry);
         try {
-            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-            console.log(`[App] Logged diaper change with entryId: ${docRef.id}`);
-            triggerUndo(docRef.id);
-            setIsLoggingDiaper(false);
+            const entryRef = doc(db, 'entries', updatedEntry.id);
+            const { id, ...dataToSave } = updatedEntry;
+            await updateDoc(entryRef, {
+                ...toFirestore(dataToSave),
+                updatedAt: serverTimestamp()
+            });
+            console.log(`[App] Successfully updated entry.`);
+            setModalView('none');
+            setSelectedEntry(null);
         } catch (error) {
-            console.error("[App] Error logging diaper change:", error);
+            console.error(`[App] Error updating entry ${updatedEntry.id}:`, error);
         }
-    }, [activeBaby, user, userProfile?.familyId]);
+    }, []);
 
-    const handleLogBath = useCallback(async (bathData: Omit<Bath, 'id' | 'babyId' | 'familyId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'startedAt' | 'endedAt'>) => {
-        if (!user || !userProfile?.familyId || !activeBaby) return;
-        const now = new Date();
-        const docPayload = {
-            ...bathData,
-            babyId: activeBaby.id,
-            familyId: userProfile.familyId,
-            startedAt: now,
-            endedAt: now,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-        console.log('[App] Logging bath:', docPayload);
+    const handleDeleteEntry = useCallback(async (entryId: string) => {
+        const entryToDelete = entries.find(e => e.id === entryId);
+        if (!entryToDelete) return;
+        console.log(`[App] Deleting entry ${entryId}:`, entryToDelete);
         try {
-            const docRef = await addDoc(collection(db, "entries"), toFirestore(docPayload));
-            console.log(`[App] Logged bath with entryId: ${docRef.id}`);
-            triggerUndo(docRef.id);
-            setIsLoggingBath(false);
+            await deleteDoc(doc(db, "entries", entryId));
+            console.log(`[App] Successfully deleted entry.`);
+            setModalView('none');
+            setSelectedEntry(null);
+            triggerUndo(entryToDelete);
         } catch (error) {
-            console.error("[App] Error logging bath:", error);
+            console.error(`[App] Error deleting entry ${entryId}:`, error);
         }
-    }, [activeBaby, user, userProfile?.familyId]);
+    }, [entries]);
 
 
     const renderContent = () => {
-        if (isLoggingFeed) {
-            return <StartFeedScreen onBack={() => setIsLoggingFeed(false)} onStartNursing={handleStartTimer} onLogBottle={handleLogBottle}/>;
-        }
-        if (isLoggingDiaper) {
-            return <LogDiaperScreen onBack={() => setIsLoggingDiaper(false)} onSave={handleLogDiaper} />;
-        }
-        if (isLoggingBath) {
-            return <LogBathScreen onBack={() => setIsLoggingBath(false)} onSave={handleLogBath} entries={entries} />;
+        switch(modalView) {
+            case 'logFeed':
+                // FIX: Explicitly type the new entry object to satisfy the discriminated union type expected by `addEntry`.
+                return <StartFeedScreen onBack={() => setModalView('none')} onStartNursing={handleStartTimer} onLogBottle={(amount, _, type) => {
+                    const now = new Date();
+                    const newEntry: Omit<Feed, 'id' | 'babyId' | 'familyId' | 'createdBy' | 'createdAt' | 'updatedAt'> = { kind: 'bottle', amountOz: amount, startedAt: now, endedAt: now };
+                    addEntry(newEntry);
+                }}/>;
+            case 'logDiaper':
+                return <LogDiaperScreen onBack={() => setModalView('none')} onSave={(data) => {
+                    const now = new Date();
+                    addEntry({ ...data, startedAt: now, endedAt: now });
+                }} />;
+            case 'logBath':
+                return <LogBathScreen onBack={() => setModalView('none')} onSave={(data) => {
+                     const now = new Date();
+                    addEntry({ ...data, startedAt: now, endedAt: now });
+                }} entries={entries} />;
+            case 'logPump':
+                 // FIX: Explicitly type the new entry object to satisfy the discriminated union type expected by `addEntry`.
+                 return <LogPumpScreen onBack={() => setModalView('none')} onSave={(data) => {
+                    const newEntry: Omit<Pump, 'id' | 'babyId' | 'familyId' | 'createdBy' | 'createdAt' | 'updatedAt'> = { kind: 'pump', ...data };
+                    addEntry(newEntry);
+                }} />;
+            case 'editEntry':
+                return <EditEntryScreen 
+                            entry={selectedEntry!} 
+                            onBack={() => { setModalView('none'); setSelectedEntry(null); }}
+                            onSave={handleUpdateEntry}
+                            onDelete={handleDeleteEntry}
+                        />
+            default:
+                // No modal, render tab content
+                break;
         }
         
         switch(activeTab) {
@@ -409,33 +408,35 @@ const App: React.FC = () => {
                     entries={entries}
                     activeTimer={activeTimer}
                     onStopTimer={handleStopTimer}
-                    onStartFeedClick={() => setIsLoggingFeed(true)}
+                    onStartFeedClick={() => setModalView('logFeed')}
                     onStartSleepClick={() => handleStartTimer('sleep')}
-                    onStartDiaperClick={() => setIsLoggingDiaper(true)}
-                    onStartBathClick={() => setIsLoggingBath(true)}
-                />;
-            case 'feeding':
-                return <StartFeedScreen onBack={() => setActiveTab('home')} onStartNursing={handleStartTimer} onLogBottle={handleLogBottle}/>;
-            case 'sleep':
-                 return <HomeScreen 
-                    baby={activeBaby!} 
-                    entries={entries}
-                    activeTimer={activeTimer}
-                    onStopTimer={handleStopTimer}
-                    onStartFeedClick={() => setIsLoggingFeed(true)}
-                    onStartSleepClick={() => handleStartTimer('sleep')}
-                    onStartDiaperClick={() => setIsLoggingDiaper(true)}
-                    onStartBathClick={() => setIsLoggingBath(true)}
+                    onStartDiaperClick={() => setModalView('logDiaper')}
+                    onStartBathClick={() => setModalView('logBath')}
+                    onStartPumpClick={() => setModalView('logPump')}
                 />;
             case 'history':
-                return <HistoryScreen entries={entries} />;
+                return <HistoryScreen entries={entries} onSelectEntry={(entry) => {
+                    setSelectedEntry(entry);
+                    setModalView('editEntry');
+                }} />;
             case 'settings':
                 return <SettingsScreen 
                     baby={activeBaby!} 
                     onUpdateBaby={setActiveBaby} 
                 />;
             default:
-                return null;
+                // Fallback to home for other tabs for now
+                 return <HomeScreen 
+                    baby={activeBaby!} 
+                    entries={entries}
+                    activeTimer={activeTimer}
+                    onStopTimer={handleStopTimer}
+                    onStartFeedClick={() => setModalView('logFeed')}
+                    onStartSleepClick={() => handleStartTimer('sleep')}
+                    onStartDiaperClick={() => setModalView('logDiaper')}
+                    onStartBathClick={() => setModalView('logBath')}
+                    onStartPumpClick={() => setModalView('logPump')}
+                />;
         }
     }
     
@@ -447,25 +448,20 @@ const App: React.FC = () => {
         return <Auth />;
     }
 
-    // New user flow: direct to join/create family screen
     if (!userProfile?.familyId) {
         return <JoinOrCreateFamilyScreen 
             onCreateFamily={async () => {
                 if (!user) throw new Error("User not authenticated");
                 await createFamily(user.uid);
-                // The onSnapshot listener in useAuth will automatically update the userProfile
             }}
             onJoinFamily={async (code: string) => {
                 if (!user) throw new Error("User not authenticated");
                 const result = await acceptInvite(code, user.uid);
-                // The onSnapshot listener will handle the update.
-                // We return the error message to the component to display.
                 return result.error || null;
             }}
         />
     }
 
-    // Existing family member, but no baby created yet
     if (babyLoading) {
         return <WelcomeScreen />;
     }
@@ -474,12 +470,12 @@ const App: React.FC = () => {
         return <CreateBabyScreen onSave={handleCreateBaby} />;
     }
 
-    const showBottomNav = !isLoggingFeed && !isLoggingDiaper && !isLoggingBath;
+    const showBottomNav = modalView === 'none';
 
     return (
         <div className="min-h-screen bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text transition-colors duration-300">
             <div className="max-w-md mx-auto relative">
-                <main className="pb-24">
+                <main className={showBottomNav ? "pb-24" : ""}>
                     {entriesLoading ? <div className="p-8 text-center">Loading entries...</div> : renderContent()}
                 </main>
                 
@@ -495,24 +491,9 @@ const App: React.FC = () => {
                 
                 {isAiAssistantOpen && <AIAssistant onClose={() => setIsAiAssistantOpen(false)} babyContext={babyContext} />}
 
-                {lastAddedEntryId && <UndoBanner onUndo={handleUndo} />}
+                {lastDeletedEntry && <UndoBanner onUndo={handleUndo} />}
                 {showBottomNav && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
             </div>
-             <style>{`
-                @keyframes pulse-slow {
-                    0%, 100% {
-                        transform: scale(1);
-                        box-shadow: 0 0 0 0 rgba(127, 86, 217, 0.7);
-                    }
-                    50% {
-                        transform: scale(1.05);
-                        box-shadow: 0 0 0 10px rgba(127, 86, 217, 0);
-                    }
-                }
-                .animate-pulse-slow {
-                    animation: pulse-slow 2s infinite;
-                }
-            `}</style>
         </div>
     );
 };
