@@ -1,47 +1,35 @@
-# Push current folder to GitHub repo (updates remote with your local code)
+# Sync local -> GitHub while keeping remote-only files
 $Repo = "https://github.com/Mdrapkin18/NestMate-GAI.git"
 
-# 0) Require git
+# Ensure git exists
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   Write-Error "Git is not installed or not in PATH."; exit 1
 }
 
-# 1) Init repo if needed
+# Init + set remote
 if (-not (Test-Path ".git")) { git init | Out-Null }
-
-# 2) Set 'origin' to your GitHub repo
 if (-not (git remote | Select-String -Quiet '^origin$')) {
   git remote add origin $Repo
 } else {
   git remote set-url origin $Repo
 }
 
-# 3) Detect remote default branch if it exists; fallback to 'main'
-$defaultBranch = "main"
-try {
-  $sym = git ls-remote --symref origin HEAD 2>$null
-  if ($sym) {
-    $m = [regex]::Match($sym, 'refs/heads/([^\s]+)')
-    if ($m.Success) { $defaultBranch = $m.Groups[1].Value }
-  }
-} catch {}
+# Fetch and detect remote default branch
+git fetch origin
+$remoteDefault = (git ls-remote --symref origin HEAD 2>$null) -replace '.*refs/heads/','' -replace '\s+HEAD',''
+if (-not $remoteDefault) { $remoteDefault = "main" }
 
-# 4) Ensure we’re on a real branch; create if needed
+# Be on a real branch (use remote default name)
 $current = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
-if (-not $current -or $current -eq "HEAD") {
-  git checkout -B $defaultBranch
-} else {
-  $defaultBranch = $current
-}
+if (-not $current -or $current -eq "HEAD") { git checkout -B $remoteDefault }
 
-# 5) (Optional) link upstream if remote branch exists
-git fetch origin 2>$null
-git branch --set-upstream-to=origin/$defaultBranch $defaultBranch 2>$null
-
-# 6) Stage & commit everything (allow empty to avoid errors)
+# Commit local work (so it’s included in the merge)
 git add -A
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-git commit -m "Sync from local folder ($ts)" --allow-empty
+git commit -m "Local update before merge ($ts)" --allow-empty
 
-# 7) Push to GitHub
-git push -u origin $defaultBranch
+# Merge remote INTO local, preferring LOCAL on conflicts, but KEEPING remote-only files
+git merge --allow-unrelated-histories -s recursive -X ours origin/$remoteDefault -m "Merge origin/$remoteDefault (prefer local on conflicts)"
+
+# Push result to GitHub
+git push -u origin $remoteDefault
