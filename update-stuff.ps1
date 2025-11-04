@@ -1,35 +1,32 @@
-# Sync local -> GitHub while keeping remote-only files
-$Repo = "https://github.com/Mdrapkin18/NestMate-GAI.git"
-
-# Ensure git exists
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-  Write-Error "Git is not installed or not in PATH."; exit 1
-}
-
-# Init + set remote
-if (-not (Test-Path ".git")) { git init | Out-Null }
-if (-not (git remote | Select-String -Quiet '^origin$')) {
-  git remote add origin $Repo
-} else {
-  git remote set-url origin $Repo
-}
-
-# Fetch and detect remote default branch
+# --- Sync local -> GitHub (overwrite overlaps, keep remote-only files) ---
+# 1) Make sure we have the latest refs and figure out the default branch safely
 git fetch origin
-$remoteDefault = (git ls-remote --symref origin HEAD 2>$null) -replace '.*refs/heads/','' -replace '\s+HEAD',''
-if (-not $remoteDefault) { $remoteDefault = "main" }
 
-# Be on a real branch (use remote default name)
-$current = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
-if (-not $current -or $current -eq "HEAD") { git checkout -B $remoteDefault }
+# Try to read "origin/HEAD" (usually origin/main). Fallback to main/master if needed.
+$remoteDefault = (git rev-parse --abbrev-ref origin/HEAD 2>$null) -replace '^origin/',''
+if ([string]::IsNullOrWhiteSpace($remoteDefault)) {
+  $remoteDefault = (git branch -r |
+    ForEach-Object { $_.ToString().Trim() } |
+    Where-Object { $_ -match 'origin/(main|master)$' } |
+    Select-Object -First 1) -replace '^origin/',''
+  if ([string]::IsNullOrWhiteSpace($remoteDefault)) { $remoteDefault = 'main' }
+}
+# Sanitize in case any stray tokens slipped in
+$remoteDefault = $remoteDefault.Trim().Split()[0]
 
-# Commit local work (so it’s included in the merge)
+Write-Host "Using remote default branch:" $remoteDefault
+
+# 2) Ensure we’re on a real local branch with the same name
+git checkout -B $remoteDefault
+
+# 3) Commit local changes (so they participate in the merge)
 git add -A
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 git commit -m "Local update before merge ($ts)" --allow-empty
 
-# Merge remote INTO local, preferring LOCAL on conflicts, but KEEPING remote-only files
+# 4) Merge REMOTE into LOCAL, preferring LOCAL on conflicts.
+#    This overwrites overlapping files with your versions, while preserving files that exist only on GitHub.
 git merge --allow-unrelated-histories -s recursive -X ours origin/$remoteDefault -m "Merge origin/$remoteDefault (prefer local on conflicts)"
 
-# Push result to GitHub
+# 5) Push result to GitHub
 git push -u origin $remoteDefault
