@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-g" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NestMate AI Baby Tracker</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#7A5FFF" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-primary-DEFAULT: 122 95 255;
+        --color-primary-50: 248 247 255;
+        --color-primary-100: 239 236 255;
+        --color-primary-200: 221 215 254;
+        --color-primary-300: 194 184 254;
+        --color-primary-400: 159 143 250;
+        --color-primary-500: 122 95 255;
+        --color-primary-600: 112 79 248;
+        --color-primary-700: 94 73 210;
+        --color-primary-800: 75 58 168;
+        --color-primary-900: 61 47 136;
+        --color-secondary-blue: 44 197 205;
+        --color-secondary-pink: 233 93 170;
+        --color-success: 52 199 89;
+        --color-warning: 255 184 0;
+        --color-error: 255 59 48;
+        --color-text: 28 28 30;
+        --color-text-secondary: 120 120 130;
+        --color-bg: 250 250 252;
+        --color-surface: 255 255 255;
+        --color-border: 230 230 235;
+      }
+
+      .dark {
+        --color-primary-DEFAULT: 122 95 255;
+        --color-primary-50: 30 25 64;
+        --color-primary-100: 42 35 88;
+        --color-primary-200: 52 44 110;
+        --color-primary-300: 67 56 142;
+        --color-primary-400: 82 68 177;
+        --color-primary-500: 122 95 255;
+        --color-primary-600: 141 120 255;
+        --color-primary-700: 162 145 255;
+        --color-primary-800: 185 173 255;
+        --color-primary-900: 217 210 255;
+        --color-text: 242 242 247;
+        --color-text-secondary: 152 162 179;
+        --color-bg: 16 24 40;
+        --color-surface: 29 41 57;
+        --color-border: 52 64 84;
+      }
+
+      body {
+        background-color: rgb(var(--color-bg));
+        color: rgb(var(--color-text));
+      }
+    </style>
+    <script>
+      function withOpacity(variableName) {
+        return ({ opacityValue }) => {
+          if (opacityValue !== undefined) {
+            return `rgba(var(${variableName}), ${opacityValue})`;
+          }
+          return `rgb(var(${variableName}))`;
+        };
+      }
+
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: withOpacity('--color-primary-DEFAULT'),
+                50: withOpacity('--color-primary-50'),
+                100: withOpacity('--color-primary-100'),
+                200: withOpacity('--color-primary-200'),
+                300: withOpacity('--color-primary-300'),
+                400: withOpacity('--color-primary-400'),
+                500: withOpacity('--color-primary-500'),
+                600: withOpacity('--color-primary-600'),
+                700: withOpacity('--color-primary-700'),
+                800: withOpacity('--color-primary-800'),
+                900: withOpacity('--color-primary-900'),
+              },
+              'secondary-blue': withOpacity('--color-secondary-blue'),
+              'secondary-pink': withOpacity('--color-secondary-pink'),
+              success: withOpacity('--color-success'),
+              warning: withOpacity('--color-warning'),
+              error: withOpacity('--color-error'),
+              'light-bg': 'rgb(var(--color-bg))',
+              'light-surface': 'rgb(var(--color-surface))',
+              'light-text': 'rgb(var(--color-text))',
+              'light-text-secondary': 'rgb(var(--color-text-secondary))',
+              'dark-bg': 'rgb(var(--color-bg))',
+              'dark-surface': 'rgb(var(--color-surface))',
+              'dark-text': 'rgb(var(--color-text))',
+              'dark-text-secondary': 'rgb(var(--color-text-secondary))',
+              border: 'rgb(var(--color-border))',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            borderRadius: {
+              lg: '18px',
+              xl: '24px',
+            }
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "zod": "https://aistudiocdn.com/zod@^4.1.12",
+    "firebase/app": "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js",
+    "firebase/messaging": "https://www.gstatic.com/firebasejs/9.22.1/firebase-messaging.js",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/",
+    "firestore": "https://aistudiocdn.com/firestore@^1.1.6",
+    "recharts": "https://aistudiocdn.com/recharts@^2.12.7",
+    "vitest": "https://aistudiocdn.com/vitest@^4.0.6"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-light-bg dark:bg-dark-bg font-sans">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

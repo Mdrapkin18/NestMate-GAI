@@ -1,0 +1,63 @@
+
+{
+  "description": "Represents a single feeding event, either nursing or bottle.",
+  "version": 1,
+  "payload": {
+    "id": "string (uuid)",
+    "babyId": "string (uuid)",
+    "familyId": "string (uuid)",
+    "createdBy": "string (uid)",
+    "createdAt": "string (ISO 8601 Timestamp, UTC)",
+    "updatedAt": "string (ISO 8601 Timestamp, UTC)",
+    "note": "string (optional)",
+    "schemaVersion": 1,
+    "sessionId": "string (uuid, optional, for linking nursing sides)",
+    "type": "'feed'",
+    "kind": "'nursing' | 'bottle'",
+    "startedAt": "string (ISO 8601 Timestamp, UTC)",
+    "endedAt": "string (ISO 8601 Timestamp, UTC)",
+    "side": "'left' | 'right' (optional, for nursing only)",
+    "amountOz": "number (optional, for bottle only)"
+  },
+  "examples": [
+    {
+      "comment": "A 10-minute nursing session on the left side.",
+      "data": {
+        "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "babyId": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+        "familyId": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+        "createdBy": "user_abc123",
+        "createdAt": "2025-10-26T10:10:00Z",
+        "updatedAt": "2025-10-26T10:10:00Z",
+        "sessionId": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
+        "type": "feed",
+        "kind": "nursing",
+        "startedAt": "2025-10-26T10:00:00Z",
+        "endedAt": "2025-10-26T10:10:00Z",
+        "side": "left"
+      }
+    },
+    {
+      "comment": "A 4.5 oz bottle feed.",
+      "data": {
+        "id": "f1a2b3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d",
+        "babyId": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+        "familyId": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+        "createdBy": "user_def456",
+        "createdAt": "2025-10-26T12:05:00Z",
+        "updatedAt": "2025-10-26T12:05:00Z",
+        "type": "feed",
+        "kind": "bottle",
+        "startedAt": "2025-10-26T12:00:00Z",
+        "endedAt": "2025-10-26T12:05:00Z",
+        "amountOz": 4.5
+      }
+    }
+  ],
+  "invariants": [
+    "All timestamps must be stored in UTC.",
+    "`endedAt` must be greater than or equal to `startedAt`.",
+    "`side` is required if `kind` is 'nursing'.",
+    "`amountOz` is required if `kind` is 'bottle'."
+  ]
+}

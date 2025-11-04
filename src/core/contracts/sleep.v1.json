@@ -1,0 +1,39 @@
+
+{
+  "description": "Represents a single sleep session.",
+  "version": 1,
+  "payload": {
+    "id": "string (uuid)",
+    "babyId": "string (uuid)",
+    "familyId": "string (uuid)",
+    "createdBy": "string (uid)",
+    "createdAt": "string (ISO 8601 Timestamp, UTC)",
+    "updatedAt": "string (ISO 8601 Timestamp, UTC)",
+    "note": "string (optional)",
+    "schemaVersion": 1,
+    "type": "'sleep'",
+    "startedAt": "string (ISO 8601 Timestamp, UTC)",
+    "endedAt": "string (ISO 8601 Timestamp, UTC, optional)"
+  },
+  "examples": [
+    {
+      "comment": "An ongoing nap.",
+      "data": {
+        "id": "e4f5a6b7-c8d9-4e0f-a1b2-c3d4e5f6a7b8",
+        "babyId": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+        "familyId": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f",
+        "createdBy": "user_abc123",
+        "createdAt": "2025-10-26T14:00:00Z",
+        "updatedAt": "2025-10-26T14:00:00Z",
+        "type": "sleep",
+        "startedAt": "2025-10-26T14:00:00Z",
+        "endedAt": null
+      }
+    }
+  ],
+  "invariants": [
+    "All timestamps must be stored in UTC.",
+    "If `endedAt` exists, it must be greater than or equal to `startedAt`.",
+    "`endedAt` being null or undefined signifies an active timer."
+  ]
+}

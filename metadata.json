@@ -1,0 +1,7 @@
+{
+  "name": "NestMate AI Baby Tracker",
+  "description": "A smart baby tracker app for new parents to log feeding, sleep, and other activities, enhanced with a Gemini-powered AI assistant for real-time advice and voice interaction.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
